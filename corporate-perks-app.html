@@ -1,0 +1,264 @@
+import React, { useState, useMemo } from 'react';
+import { Search, MapPin, Building, ChevronDown, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle } from 'lucide-react';
+
+// --- Mock Data (Platform Model) 模擬資料（平台模式）---
+
+const companies = {
+  'company-a': { id: 'company-a', name: '卓越科技有限公司' },
+  'company-b': { id: 'company-b', name: '創新國際股份有限公司' },
+};
+
+const users = {
+  'user-1': { id: 'user-1', name: '王大明', companyId: 'company-a', avatarUrl: 'https://placehold.co/100x100/7F9CF5/FFFFFF?text=王', favorites: [2, 4] },
+  'user-2': { id: 'user-2', name: '陳小美', companyId: 'company-b', avatarUrl: 'https://placehold.co/100x100/F5A623/FFFFFF?text=陳', favorites: [1] },
+};
+
+const categories = [
+  '美食餐飲', '休閒娛樂', '生活百貨', '美容美髮', '交通出行', '學習成長'
+];
+
+const stores = [
+  { id: 1, name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
+  { id: 2, name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
+  { id: 3, name: '誠品生活 Eslite Spectrum', category: '生活百貨', offer: '當日單筆消費滿千，享 95 折優惠。', location: '指定門市', logo: 'https://placehold.co/100x100/000000/FFFFFF?text=Eslite', details: '部分專櫃、特價品、書店及餐飲不適用。詳情請洽詢現場服務人員。' },
+  { id: 4, name: 'World Gym 世界健身俱樂部', category: '休閒娛樂', offer: '企業員工免入會費，月費享 8 折。', location: '全台據點', logo: 'https://placehold.co/100x100/D42E1E/FFFFFF?text=WG', details: '需簽訂至少一年合約。需提供在職證明。' },
+];
+
+const initialWishlist = [
+    { id: 1, name: '海底撈火鍋', category: '美食餐飲', wishes: 128, wishedBy: [] },
+    { id: 2, name: 'Uniqlo 優衣庫', category: '生活百貨', wishes: 94, wishedBy: ['user-1'] },
+    { id: 3, name: '台灣高鐵', category: '交通出行', wishes: 85, wishedBy: [] },
+];
+
+
+// --- Components 元件 ---
+
+const CompanySwitcher = ({ currentUser, onSwitchUser }) => (
+    <div className="bg-blue-600 text-white p-2 text-center text-sm">
+        <div className="container mx-auto flex items-center justify-center">
+            <Users size={16} className="mr-2" />
+            <span>[展示模式] 目前身分: {currentUser.name} ({companies[currentUser.companyId].name})</span>
+            <button onClick={onSwitchUser} className="ml-4 bg-white text-blue-600 font-bold py-1 px-3 rounded-full text-xs hover:bg-blue-100">切換使用者</button>
+        </div>
+    </div>
+);
+
+const Header = ({ user }) => (
+  <header className="bg-white shadow-md">
+    <div className="container mx-auto px-4 sm:px-6">
+      <div className="flex items-center justify-between h-16 sm:h-20">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <Building className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">企業福利平台</h1>
+        </div>
+        <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer">
+          <img src={user.avatarUrl} alt="Employee Avatar" className="w-9 h-9 sm:w-10 sm:h-10 rounded-full" />
+          <div className="hidden sm:block">
+            <p className="text-gray-800 font-semibold">{user.name}</p>
+            <p className="text-xs text-gray-500">{companies[user.companyId].name}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+);
+
+const StoreCard = ({ store, onSelect, isFavorite, onToggleFavorite }) => (
+  <div className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-1 sm:hover:-translate-y-2 transition-transform duration-300 cursor-pointer relative" onClick={() => onSelect(store)}>
+    <button 
+      onClick={(e) => { e.stopPropagation(); onToggleFavorite(store.id); }} 
+      className="absolute top-2 right-2 p-1.5 bg-white/70 rounded-full text-gray-500 hover:text-red-500 backdrop-blur-sm z-10"
+    >
+      <Heart className={`w-5 h-5 transition-colors ${isFavorite ? 'text-red-500 fill-current' : ''}`} />
+    </button>
+    <div className="flex p-4">
+      <img src={store.logo} alt={`${store.name} logo`} className="w-16 h-16 sm:w-20 sm:h-20 rounded-md flex-shrink-0 object-cover" />
+      <div className="ml-4 flex flex-col justify-center">
+        <div>
+          <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded-full mb-2">{store.category}</span>
+          <h3 className="font-bold text-base sm:text-lg text-gray-900">{store.name}</h3>
+        </div>
+        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{store.offer}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const EmployeeIdView = ({ user, onBack }) => (
+    <div className="p-4 sm:p-8 text-center">
+        <button onClick={onBack} className="absolute top-4 left-4 text-gray-500 hover:text-gray-600 flex items-center text-sm"><ArrowLeft size={16} className="mr-1" /> 返回</button>
+        <div className="flex flex-col items-center justify-center pt-8">
+            <img src={user.avatarUrl} alt="Employee Avatar" className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-white shadow-lg" />
+            <h3 className="text-xl sm:text-2xl font-bold mt-4 text-gray-900">{user.name}</h3>
+            <p className="text-sm sm:text-base text-gray-600">{companies[user.companyId].name}</p>
+            <div className="my-4 sm:my-6 p-2 sm:p-4 bg-white rounded-lg"><img src={`https://placehold.co/256x256/000000/FFFFFF?text=QR+Code`} alt="Employee QR Code" className="w-48 h-48 sm:w-64 sm:h-64 mx-auto"/></div>
+            <p className="text-sm text-gray-500">請出示此 QR Code 供店家掃描以享優惠</p><p className="text-xs text-red-500 mt-2">此畫面僅在 5 分鐘內有效</p>
+        </div>
+    </div>
+);
+
+const StoreDetailModal = ({ store, user, onClose }) => {
+  const [showQrCode, setShowQrCode] = useState(false);
+  const handleClose = () => { setShowQrCode(false); onClose(); };
+  const handleOverlayClick = (e) => { if (e.target === e.currentTarget) handleClose(); };
+  if (!store) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4" onClick={handleOverlayClick}>
+      <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-lg relative animate-fade-in-up transition-all duration-300">
+        <button onClick={handleClose} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"><X size={24} /></button>
+        {showQrCode ? <EmployeeIdView user={user} onBack={() => setShowQrCode(false)} /> : (
+          <>
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center mb-4">
+                <img src={store.logo} alt={`${store.name} logo`} className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover" />
+                <div className="ml-4">
+                  <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full mb-2">{store.category}</span>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{store.name}</h2>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div><h4 className="font-semibold text-base sm:text-lg text-blue-700">專屬優惠</h4><p className="text-gray-700 text-sm sm:text-base leading-relaxed">{store.offer}</p></div>
+                <div><h4 className="font-semibold text-base sm:text-lg text-blue-700">適用地點</h4><p className="text-gray-700 text-sm sm:text-base flex items-center"><MapPin size={16} className="mr-2" />{store.location}</p></div>
+                <div><h4 className="font-semibold text-base sm:text-lg text-blue-700">注意事項</h4><p className="text-gray-600 text-xs sm:text-sm leading-relaxed">{store.details}</p></div>
+              </div>
+            </div>
+            <div className="bg-gray-200 px-4 py-3 sm:px-6 sm:py-4 rounded-b-xl">
+               <button onClick={() => setShowQrCode(true)} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"><QrCode size={20} /><span>產生優惠 QR Code</span></button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const WishlistCard = ({ item, onWish, hasWished }) => (
+    <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md flex items-center justify-between">
+        <div><p className="font-semibold text-sm sm:text-base text-gray-800">{item.name}</p><p className="text-xs sm:text-sm text-gray-500">{item.category}</p></div>
+        <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="text-right"><p className="font-bold text-yellow-500 text-base sm:text-lg">{item.wishes}</p><p className="text-xs text-gray-400">人許願</p></div>
+            <button onClick={() => onWish(item.id)} disabled={hasWished} className={`w-20 sm:w-24 text-white font-bold py-2 px-2 sm:px-4 rounded-full transition-colors duration-300 flex items-center justify-center text-xs sm:text-sm ${ hasWished ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'}`}><ThumbsUp size={14} className="mr-1 sm:mr-2" />{hasWished ? '已許願' : '許願+1'}</button>
+        </div>
+    </div>
+);
+
+const AddWishForm = ({ onAddWish }) => {
+    const [wishText, setWishText] = useState('');
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (wishText.trim()) {
+            onAddWish(wishText.trim());
+            setWishText('');
+        }
+    };
+    return (
+        <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+            <input type="text" value={wishText} onChange={(e) => setWishText(e.target.value)} placeholder="輸入您想要的店家..." className="flex-grow h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"/>
+            <button type="submit" className="h-12 bg-green-500 text-white font-bold px-4 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center"><PlusCircle size={20} /></button>
+        </form>
+    );
+};
+
+const CategoryFilter = ({ selected, onSelect }) => {
+    const allCategories = ['我的最愛', '所有類別', ...categories];
+    return (
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-4 px-4">
+            {allCategories.map(cat => (
+                <button key={cat} onClick={() => onSelect(cat)} className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${selected === cat ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                    {cat === '我的最愛' ? <Heart className="w-4 h-4 inline-block mr-1" /> : null}
+                    {cat}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+// 主應用程式
+export default function App() {
+  const [currentUser, setCurrentUser] = useState(users['user-1']);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('所有類別');
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [wishlist, setWishlist] = useState(initialWishlist);
+  const [favorites, setFavorites] = useState(currentUser.favorites);
+
+  const handleSwitchUser = () => {
+      const nextUser = currentUser.id === 'user-1' ? users['user-2'] : users['user-1'];
+      setCurrentUser(nextUser);
+      setFavorites(nextUser.favorites);
+      setSelectedCategory('所有類別'); // 切換使用者後重置篩選
+  };
+
+  const handleToggleFavorite = (storeId) => {
+      setFavorites(prev => prev.includes(storeId) ? prev.filter(id => id !== storeId) : [...prev, storeId]);
+  };
+
+  const filteredStores = useMemo(() => {
+    let filtered = stores;
+    if (selectedCategory === '我的最愛') {
+        filtered = stores.filter(store => favorites.includes(store.id));
+    } else if (selectedCategory !== '所有類別') {
+        filtered = stores.filter(store => store.category === selectedCategory);
+    }
+    return filtered.filter(store => store.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [searchTerm, selectedCategory, favorites]);
+
+  const handleWish = (id) => {
+      setWishlist(currentWishlist => currentWishlist.map(item => {
+          if (item.id === id && !item.wishedBy.includes(currentUser.id)) {
+              return { ...item, wishes: item.wishes + 1, wishedBy: [...item.wishedBy, currentUser.id] };
+          }
+          return item;
+      }).sort((a, b) => b.wishes - a.wishes));
+  };
+  
+  const handleAddWish = (wishText) => {
+      const newWish = {
+          id: Date.now(),
+          name: wishText,
+          category: '其他',
+          wishes: 1,
+          wishedBy: [currentUser.id]
+      };
+      setWishlist(prev => [newWish, ...prev].sort((a, b) => b.wishes - a.wishes));
+  };
+
+  return (
+    <div className="bg-gray-50 min-h-screen font-sans">
+      <CompanySwitcher currentUser={currentUser} onSwitchUser={handleSwitchUser} />
+      <div className="sticky top-0 z-30">
+        <Header user={currentUser} />
+      </div>
+      
+      <main className="container mx-auto p-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm mb-6 sticky top-[40px] sm:top-[80px] z-20">
+          <div className="relative mb-4">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input type="text" placeholder="搜尋商店名稱..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full h-12 pl-12 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition" />
+          </div>
+          <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {filteredStores.length > 0 ? (
+            filteredStores.map(store => <StoreCard key={store.id} store={store} onSelect={setSelectedStore} isFavorite={favorites.includes(store.id)} onToggleFavorite={handleToggleFavorite} />)
+          ) : (
+            <div className="col-span-full text-center py-16"><p className="text-gray-500 text-lg">找不到符合條件的商店。</p></div>
+          )}
+        </div>
+
+        <div className="mt-12 sm:mt-16">
+            <div className="flex items-center mb-4 sm:mb-6"><Star className="w-7 h-7 sm:w-8 sm:h-8 text-yellow-500" /><h2 className="text-xl sm:text-2xl font-bold text-gray-800 ml-2 sm:ml-3">平台許願池</h2></div>
+            <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6">
+                <div className="space-y-3 sm:space-y-4">
+                    {wishlist.map(item => <WishlistCard key={item.id} item={item} onWish={handleWish} hasWished={item.wishedBy.includes(currentUser.id)} />)}
+                </div>
+                <AddWishForm onAddWish={handleAddWish} />
+            </div>
+        </div>
+      </main>
+
+      <StoreDetailModal store={selectedStore} user={currentUser} onClose={() => setSelectedStore(null)} />
+    </div>
+  );
+}
