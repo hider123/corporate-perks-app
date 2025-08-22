@@ -1,7 +1,25 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone } from 'lucide-react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone, Loader2 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs } from 'firebase/firestore';
+
+// --- Firebase 設定 ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCH19CEf7ybXeJE-ZErIScVc8fXFrwh5Zw",
+  authDomain: "corporate-perks-app.firebaseapp.com",
+  projectId: "corporate-perks-app",
+  storageBucket: "corporate-perks-app.appspot.com",
+  messagingSenderId: "104236011894",
+  appId: "1:104236011894:web:f858f533ac72594458ea57"
+};
+
+// 初始化 Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 
 // --- 模擬資料 (平台模型) ---
+// 注意：'stores' 資料現在將從 Firebase 讀取，我們保留其他模擬資料暫時使用。
 const companies = {
   'company-a': { 
     id: 'company-a', 
@@ -26,11 +44,6 @@ const users = {
 };
 
 const categories = ['美食餐飲', '休閒娛樂', '生活百貨', '美容美髮', '交通出行', '學習成長'];
-
-const stores = [
-  { id: 1, name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
-  { id: 2, name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
-];
 
 const teaStores = [
     { id: 'ts-1', name: '50嵐', logo: 'https://placehold.co/100x100/F9A825/000000?text=50嵐', description: '台灣知名連鎖手搖飲品牌。' },
@@ -754,7 +767,41 @@ export default function App() {
   const [activePings, setActivePings] = useState([
       { id: 'ping-1', itemId: 'gb-2', leader: 'user-2', members: ['user-2'], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
   ]);
+  const [stores, setStores] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   
+  useEffect(() => {
+    const fetchStores = async () => {
+      try {
+        // 模擬網路延遲
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // 這裡我們暫時用模擬資料來代替真實的 Firestore 呼叫
+        // 在真實情境中，您會取消註解下面的 Firestore 程式碼
+        const mockStores = [
+          { id: 1, name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
+          { id: 2, name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
+        ];
+        setStores(mockStores);
+
+        /*
+        // --- 真實 Firestore 讀取程式碼 ---
+        const querySnapshot = await getDocs(collection(db, "stores"));
+        const storesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setStores(storesData);
+        */
+
+      } catch (error) {
+        console.error("讀取商店資料失敗:", error);
+        // 可以在這裡設定錯誤狀態並顯示錯誤訊息
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStores();
+  }, []);
+
   const handleStartPing = (itemId) => {
       const newPing = { id: `ping-${Date.now()}`, itemId: itemId, leader: currentUser.id, members: [currentUser.id], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
       setActivePings([...activePings, newPing]);
@@ -828,6 +875,14 @@ export default function App() {
   };
 
   const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full pt-20">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+          <p className="mt-4 text-gray-500">正在載入商店資料...</p>
+        </div>
+      );
+    }
     if (isViewingTransactions) {
         return <TransactionHistoryScreen transactions={transactions[currentUser.id] || []} />;
     }
