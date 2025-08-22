@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart } from 'lucide-react';
 
-// --- Mock Data (Platform Model) ---
+// --- 模擬資料 (平台模型) ---
 const companies = {
   'company-a': { id: 'company-a', name: '卓越科技有限公司' },
   'company-b': { id: 'company-b', name: '創新國際股份有限公司' },
@@ -27,12 +27,12 @@ const teaStores = [
 
 const sampleMenu = {
     'ts-1': [
-        { id: '50-1', name: '珍珠奶茶', price: 50, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰', '溫', '熱'] } },
-        { id: '50-2', name: '四季春青茶', price: 35, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰'] } },
+        { id: '50-1', name: '珍珠奶茶', price: 50, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰', '溫', '熱'] }, imageUrl: 'https://placehold.co/400x400/FFC107/000000?text=珍珠奶茶' },
+        { id: '50-2', name: '四季春青茶', price: 35, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰'] }, imageUrl: 'https://placehold.co/400x400/8BC34A/FFFFFF?text=四季春' },
     ],
     'ts-2': [
-        { id: 'kbk-1', name: '熟成紅茶', price: 35, options: { sugar: ['正常', '八分', '五分', '三分', '無糖'], ice: ['正常', '少冰', '微冰', '去冰', '溫', '熱'] } },
-        { id: 'kbk-2', name: '白玉歐蕾', price: 60, options: { sugar: ['正常', '八分', '五分', '三分', '無糖'], ice: ['正常', '少冰', '微冰', '去冰'] } },
+        { id: 'kbk-1', name: '熟成紅茶', price: 35, options: { sugar: ['正常', '八分', '五分', '三分', '無糖'], ice: ['正常', '少冰', '微冰', '去冰', '溫', '熱'] }, imageUrl: 'https://placehold.co/400x400/795548/FFFFFF?text=熟成紅茶' },
+        { id: 'kbk-2', name: '白玉歐蕾', price: 60, options: { sugar: ['正常', '八分', '五分', '三分', '無糖'], ice: ['正常', '少冰', '微冰', '去冰'] }, imageUrl: 'https://placehold.co/400x400/D7CCC8/3E2723?text=白玉歐蕾' },
     ],
 };
 
@@ -43,7 +43,11 @@ const initialGroupBuys = [
     { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', joinedBy: ['user-1'] },
 ];
 
-// --- Custom Hook for Countdown ---
+const suggestionDatabase = [
+  '路易莎咖啡 (LOUISA COFFEE)', '大苑子', '康是美', 'NET 主富服飾', '鼎泰豐', '鼎王麻辣鍋', 'IKEA 宜家家居', '家樂福 Carrefour', '全聯福利中心'
+];
+
+// --- 用於倒數計時的 Custom Hook ---
 const useCountdown = (endDate) => {
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
     const [isEnded, setIsEnded] = useState(false);
@@ -60,7 +64,7 @@ const useCountdown = (endDate) => {
     return { timeLeft, isEnded };
 };
 
-// --- Native-style Components ---
+// --- 仿原生風格的元件 ---
 const AppHeader = ({ title, onBack, showBackButton = false, notifications, onMarkAllRead, onProfileClick }) => {
     const [panelOpen, setPanelOpen] = useState(false);
     const unreadCount = notifications.filter(n => !n.read).length;
@@ -79,7 +83,7 @@ const AppHeader = ({ title, onBack, showBackButton = false, notifications, onMar
                         </button>
                         {panelOpen && <NotificationPanel notifications={notifications} onMarkAllRead={() => { onMarkAllRead(); setPanelOpen(false); }} />}
                     </div>
-                     <button onClick={onProfileClick} className="p-2 rounded-full active:bg-gray-200 transition-colors">
+                   <button onClick={onProfileClick} className="p-2 rounded-full active:bg-gray-200 transition-colors">
                         <User className="w-6 h-6 text-gray-600" />
                     </button>
                 </div>
@@ -95,7 +99,7 @@ const NotificationPanel = ({ notifications, onMarkAllRead }) => {
 
 const BottomNavBar = ({ activeTab, setActiveTab }) => {
     const navItems = [{ id: 'home', icon: Home, label: '主頁' }, { id: 'groupbuy', icon: ShoppingBag, label: '拼團' }, { id: 'tea', icon: Coffee, label: '下午茶' }, { id: 'wishlist', icon: Gift, label: '許願池' }];
-    return (<footer className="bg-white fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200"><div className="flex justify-around items-center h-16">{navItems.map(item => (<button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center justify-center space-y-1 w-full transition-colors ${activeTab === item.id ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}><item.icon className="w-6 h-6" /><span className="text-xs font-medium">{item.label}</span></button>))}</div></footer>);
+    return (<footer className="bg-white/95 backdrop-blur-sm absolute bottom-0 left-0 right-0 z-20 border-t border-gray-200/80"><div className="flex justify-around items-center h-16">{navItems.map(item => (<button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center justify-center space-y-1 w-full transition-colors ${activeTab === item.id ? 'text-blue-600' : 'text-gray-500 hover:text-blue-600'}`}><item.icon className="w-6 h-6" /><span className="text-xs font-medium">{item.label}</span></button>))}</div></footer>);
 };
 
 const StoreCard = ({ store, onSelect, isFavorite, onToggleFavorite, small = false }) => (
@@ -111,7 +115,7 @@ const StoreCard = ({ store, onSelect, isFavorite, onToggleFavorite, small = fals
   </div>
 );
 
-// --- Screen Components ---
+// --- 頁面元件 ---
 
 const HomeScreen = ({ stores, favorites, onToggleFavorite, onSelectStore }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -124,78 +128,306 @@ const HomeScreen = ({ stores, favorites, onToggleFavorite, onSelectStore }) => {
 
 const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     const [wishText, setWishText] = useState('');
-    const handleSubmit = e => { e.preventDefault(); if (wishText.trim()) { onAddWish(wishText.trim()); setWishText(''); } };
-    return (<main className="p-4"><ul className="bg-white rounded-xl overflow-hidden border border-gray-200">{wishlist.map((item, index) => (<li key={item.id} className={`flex items-center justify-between p-4 ${index < wishlist.length - 1 ? 'border-b border-gray-200' : ''}`}><div><p className="font-semibold text-gray-800">{item.name}</p><p className="text-sm text-gray-500">{item.wishes} 人許願</p></div><button onClick={() => onWish(item.id)} disabled={item.wishedBy.includes(currentUser.id)} className={`w-24 text-white font-bold py-2 px-4 rounded-full transition-colors duration-300 flex items-center justify-center text-sm ${ item.wishedBy.includes(currentUser.id) ? 'bg-gray-300' : 'bg-yellow-500 active:bg-yellow-600'}`}><ThumbsUp size={16} className="mr-2" />{item.wishedBy.includes(currentUser.id) ? '已許願' : '+1'}</button></li>))}</ul><form onSubmit={handleSubmit} className="mt-4 flex gap-2"><input type="text" value={wishText} onChange={e => setWishText(e.target.value)} placeholder="輸入您想要的店家..." className="flex-grow h-12 px-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"/><button type="submit" className="h-12 bg-green-500 text-white font-bold px-4 rounded-lg flex items-center justify-center active:bg-green-600"><PlusCircle size={20} /></button></form></main>);
+    const [suggestions, setSuggestions] = useState([]);
+    
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        setWishText(value);
+        if (value.length > 0) {
+            setSuggestions(suggestionDatabase.filter(item => item.toLowerCase().includes(value.toLowerCase())));
+        } else {
+            setSuggestions([]);
+        }
+    };
+
+    const handleSuggestionClick = (name) => {
+        setWishText(name);
+        setSuggestions([]);
+    };
+
+    const handleSubmit = e => { 
+        e.preventDefault(); 
+        if (wishText.trim().length < 2 || !isNaN(wishText.trim())) {
+            // In a real app, use a modal instead of alert.
+            alert("請輸入有效的店家名稱 (至少兩個字元，且不能純為數字)");
+            return;
+        }
+        onAddWish(wishText.trim()); 
+        setWishText(''); 
+    };
+
+    return (
+        <main className="p-4">
+            <ul className="bg-white rounded-xl overflow-hidden border border-gray-200">{wishlist.map((item, index) => (<li key={item.id} className={`flex items-center justify-between p-4 ${index < wishlist.length - 1 ? 'border-b border-gray-200' : ''}`}><div><p className="font-semibold text-gray-800">{item.name}</p><p className="text-sm text-gray-500">{item.wishes} 人許願</p></div><button onClick={() => onWish(item.id)} disabled={item.wishedBy.includes(currentUser.id)} className={`w-24 text-white font-bold py-2 px-4 rounded-full transition-colors duration-300 flex items-center justify-center text-sm ${ item.wishedBy.includes(currentUser.id) ? 'bg-gray-300' : 'bg-yellow-500 active:bg-yellow-600'}`}><ThumbsUp size={16} className="mr-2" />{item.wishedBy.includes(currentUser.id) ? '已許願' : '+1'}</button></li>))}</ul>
+            <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+                <div className="relative flex-grow">
+                    <input type="text" value={wishText} onChange={handleInputChange} placeholder="輸入您想要的店家..." className="w-full h-12 px-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"/>
+                    {suggestions.length > 0 && (
+                        <ul className="absolute bottom-full mb-1 w-full bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+                           {suggestions.map(s => <li key={s} onClick={() => handleSuggestionClick(s)} className="p-2 hover:bg-gray-100 cursor-pointer">{s}</li>)}
+                        </ul>
+                    )}
+                </div>
+                <button type="submit" className="h-12 bg-green-500 text-white font-bold px-4 rounded-lg flex items-center justify-center active:bg-green-600"><PlusCircle size={20} /></button>
+            </form>
+        </main>
+    );
 };
 
 const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys }) => (
     <main className="p-4 space-y-4"><div className="flex items-center space-x-4"><img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" /><div><h2 className="text-2xl font-bold">{currentUser.name}</h2><p className="text-gray-600">{companies[currentUser.companyId].name}</p></div></div><div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl shadow-lg p-5"><div className="flex justify-between items-center"><span className="text-sm opacity-80">福利錢包餘額</span><Wallet className="w-6 h-6 opacity-80" /></div><div className="mt-2 text-4xl font-bold tracking-wider">NT$ {currentUser.walletBalance.toLocaleString()}</div><div className="mt-4 flex space-x-4 text-sm"><button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">交易紀錄</button><button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">儲值</button></div></div><div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><div className="p-4 flex justify-between items-center"><div className="flex items-center space-x-3"><Award className="w-6 h-6 text-blue-500" /><span className="font-semibold">我的點數</span></div><span className="font-bold text-lg text-blue-800">{currentUser.points} 點</span></div><div className="border-t border-gray-200 p-4"><button onClick={onCheckIn} disabled={!canCheckIn} className={`font-bold py-3 rounded-lg w-full flex items-center justify-center space-x-2 transition-colors ${canCheckIn ? 'bg-green-500 text-white active:bg-green-600' : 'bg-gray-200 text-gray-500'}`}><CheckCircle /><span>{canCheckIn ? '每日簽到 (+10點)' : '今日已簽到'}</span></button></div></div><div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><h3 className="font-bold p-4">我的團購</h3><ul className="divide-y divide-gray-200">{groupBuys.filter(gb => (gb.joinedBy || []).includes(currentUser.id)).map(gb => (<li key={gb.id} className="flex justify-between items-center p-4 text-sm active:bg-gray-100 transition-colors cursor-pointer"><p>{gb.name}</p><div className="flex items-center"><span className={`font-semibold text-xs px-2 py-1 rounded-full ${gb.current >= gb.target ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{gb.current >= gb.target ? '已成團' : '進行中'}</span><ChevronRight className="w-5 h-5 text-gray-400 ml-2" /></div></li>))}</ul></div><button onClick={onSwitchUser} className="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg w-full active:bg-gray-300">切換使用者 (展示用)</button></main>
 );
 
-const GroupBuyCard = ({ item, onSelect }) => {
-    const { timeLeft, isEnded } = useCountdown(item.endDate);
-    const progress = Math.min((item.current / item.target) * 100, 100);
-    return (<div className="bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-95 transition-transform duration-150" onClick={() => onSelect(item)}><img src={item.imageUrl} alt={item.name} className="w-full h-40 object-cover" /><div className="p-4"><h3 className="font-bold text-lg truncate">{item.name}</h3><div className="flex items-baseline space-x-2 mt-1"><p className="text-2xl font-bold text-red-500">NT${item.groupPrice}</p><p className="text-sm text-gray-500 line-through">NT${item.marketPrice}</p></div><div className="mt-3"><div className="flex justify-between text-xs text-gray-600 mb-1"><span>進度</span><span>{item.current}/{item.target}</span></div><div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div></div></div><div className={`mt-3 text-center font-semibold py-2 rounded-lg ${isEnded ? 'text-red-600 bg-red-100' : 'text-blue-600 bg-blue-100'}`}><div className="flex items-center justify-center space-x-2"><Clock size={16} /><span>{isEnded ? "已截止" : `剩餘 ${timeLeft.days}天 ${timeLeft.hours}:${timeLeft.minutes}:${timeLeft.seconds}`}</span></div></div></div></div>);
-};
+const GroupBuyCard = ({ item, onSelect }) => (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-95 transition-transform duration-150" onClick={() => onSelect(item)}>
+        <img src={item.imageUrl} alt={item.name} className="w-full h-40 object-cover" />
+        <div className="p-4">
+            <h3 className="font-bold text-lg truncate">{item.name}</h3>
+            <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-sm font-semibold text-red-500 bg-red-100 px-2 py-1 rounded">{item.groupSize}人成團</span>
+                <p className="text-2xl font-bold text-red-500">NT${item.groupPrice}</p>
+            </div>
+            <p className="text-sm text-gray-500 line-through mt-1">單獨購買 NT${item.marketPrice}</p>
+        </div>
+    </div>
+);
 const GroupBuyScreen = ({ groupBuys, onSelect }) => (<main className="p-4 space-y-4">{groupBuys.map(item => <GroupBuyCard key={item.id} item={item} onSelect={onSelect} />)}</main>);
 
 const AfternoonTeaScreen = ({ onSelectStore }) => (<main className="p-4 space-y-3">{teaStores.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
 
-const TeaOrderScreen = ({ store, menu, cart, setCart, onBack }) => {
+// --- 下午茶點餐頁面 ---
+const TeaOrderScreen = ({ store, menu, onAddToCart }) => {
     const [selectedItem, setSelectedItem] = useState(null);
-    const [options, setOptions] = useState({});
-    const handleSelectItem = (item) => { setSelectedItem(item); const defaultOptions = {}; if (item.options) { Object.keys(item.options).forEach(key => { defaultOptions[key] = item.options[key][0]; }); } setOptions(defaultOptions); };
-    const handleAddToCart = () => { setCart([...cart, { ...selectedItem, options, cartId: Date.now() }]); setSelectedItem(null); };
-    const OptionSelector = ({ item }) => (<div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end animate-fade-in" onClick={() => setSelectedItem(null)}><div className="bg-white rounded-t-2xl w-full max-w-lg animate-slide-in-up" onClick={e => e.stopPropagation()}><div className="p-4 border-b"><h3 className="font-bold text-lg">{item.name}</h3><p className="text-gray-600">NT$ {item.price}</p></div><div className="p-4 space-y-4">{item.options && Object.entries(item.options).map(([key, values]) => (<div key={key}><h4 className="font-semibold capitalize mb-2">{key === 'sugar' ? '甜度' : '冰塊'}</h4><div className="flex flex-wrap gap-2">{values.map(value => (<button key={value} onClick={() => setOptions({...options, [key]: value})} className={`px-4 py-2 rounded-full text-sm font-semibold ${options[key] === value ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>{value}</button>))}</div></div>))}</div><div className="p-4 bg-white border-t"><button onClick={handleAddToCart} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">加入購物車</button></div></div></div>);
-    return (<><AppHeader title={store.name} onBack={onBack} showBackButton notifications={initialNotifications} onMarkAllRead={() => {}} /><main className="p-4"><ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">{menu.map(item => (<li key={item.id} onClick={() => handleSelectItem(item)} className="p-4 flex justify-between items-center active:bg-gray-100 cursor-pointer"><div><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-500">NT$ {item.price}</p></div><PlusCircle className="w-6 h-6 text-blue-500" /></li>))}</ul></main>{selectedItem && <OptionSelector item={selectedItem} />}</>);
+
+    const handleAddToCart = (item, options, quantity) => {
+        onAddToCart({ ...item, options, quantity });
+        setSelectedItem(null);
+    };
+
+    return (
+        <main>
+            <div className="p-4 flex items-center space-x-4 bg-white border-b">
+                <img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg shadow-sm" />
+                <div>
+                    <h2 className="text-2xl font-bold">{store.name}</h2>
+                    <p className="text-gray-500">{store.description}</p>
+                </div>
+            </div>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {menu.map(item => (
+                    <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-3 flex items-center space-x-3">
+                        <img src={item.imageUrl} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
+                        <div className="flex-grow">
+                            <p className="font-semibold">{item.name}</p>
+                            <p className="text-sm text-gray-500">NT$ {item.price}</p>
+                        </div>
+                        <button onClick={() => setSelectedItem(item)} className="p-2 rounded-full bg-blue-500 text-white active:bg-blue-600 shadow-md">
+                            <Plus size={20} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+            {selectedItem && (
+                <OptionSelector 
+                    item={selectedItem} 
+                    onClose={() => setSelectedItem(null)} 
+                    onAddToCart={handleAddToCart} 
+                />
+            )}
+        </main>
+    );
 };
+
+// --- 品項選項選擇器 ---
+const OptionSelector = ({ item, onClose, onAddToCart }) => {
+    const [options, setOptions] = useState({});
+    const [quantity, setQuantity] = useState(1);
+
+    useEffect(() => {
+        const defaultOptions = {};
+        if (item.options) {
+            Object.keys(item.options).forEach(key => {
+                defaultOptions[key] = item.options[key][0];
+            });
+        }
+        setOptions(defaultOptions);
+    }, [item]);
+
+    const totalPrice = useMemo(() => item.price * quantity, [item.price, quantity]);
+
+    const handleSubmit = () => {
+        onAddToCart(item, options, quantity);
+    };
+
+    return (
+        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-end" onClick={onClose}>
+            <div 
+                className="bg-white rounded-t-2xl w-full max-w-md animate-slide-in-up" 
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-4 border-b text-center relative">
+                    <h3 className="font-bold text-lg">{item.name}</h3>
+                    <button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4 p-1 rounded-full active:bg-gray-200"><X size={20}/></button>
+                </div>
+                <div className="p-4 space-y-4 max-h-[50vh] overflow-y-auto">
+                    {item.options && Object.entries(item.options).map(([key, values]) => (
+                        <div key={key}>
+                            <h4 className="font-semibold capitalize mb-2 text-gray-800">{key === 'sugar' ? '甜度' : '冰塊'}</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {values.map(value => (
+                                    <button 
+                                        key={value} 
+                                        onClick={() => setOptions({...options, [key]: value})} 
+                                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${options[key] === value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}
+                                    >
+                                        {value}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="p-4 border-t flex items-center justify-between">
+                     <div className="flex items-center space-x-3">
+                        <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="p-2 rounded-full bg-gray-200 active:bg-gray-300"><Minus size={16} /></button>
+                        <span className="font-bold text-lg w-8 text-center">{quantity}</span>
+                        <button onClick={() => setQuantity(q => q + 1)} className="p-2 rounded-full bg-gray-200 active:bg-gray-300"><Plus size={16} /></button>
+                    </div>
+                    <button onClick={handleSubmit} className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg w-1/2">
+                        加入 - NT$ {totalPrice}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const CartModal = ({ cart, setCart, user, onCheckout, onClose }) => {
-    const total = cart.reduce((sum, item) => sum + item.price, 0);
-    return (<div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end animate-fade-in" onClick={onClose}><div className="bg-white rounded-t-2xl w-full max-w-lg animate-slide-in-up" onClick={e => e.stopPropagation()}><div className="p-4 border-b text-center relative"><h2 className="font-bold text-lg">您的訂單</h2><button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4"><X /></button></div><div className="p-4 max-h-60 overflow-y-auto">{cart.map((item, index) => (<div key={index} className="flex items-center justify-between py-2"><div><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-500">{Object.values(item.options).join(', ')}</p></div><div className="flex items-center space-x-3"><p>NT$ {item.price}</p></div></div>))}</div><div className="p-4 border-t space-y-3"><div className="flex justify-between font-semibold"><span>福利錢包餘額</span><span>NT$ {user.walletBalance}</span></div><div className="flex justify-between font-bold text-xl"><span>總計</span><span>NT$ {total}</span></div><button onClick={() => onCheckout(total)} disabled={user.walletBalance < total} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-400">{user.walletBalance >= total ? '確認付款' : '餘額不足'}</button></div></div></div>);
+    const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    // 移除購物車項目
+    const handleRemoveItem = (cartId) => {
+        setCart(currentCart => currentCart.filter(item => item.cartId !== cartId));
+    };
+
+    return (
+        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-end animate-fade-in" onClick={onClose}>
+            <div className="bg-white rounded-t-2xl w-full max-w-lg animate-slide-in-up" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b text-center relative">
+                    <h2 className="font-bold text-lg">您的訂單</h2>
+                    <button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4"><X /></button>
+                </div>
+                <div className="p-4 max-h-60 overflow-y-auto">
+                    {cart.length > 0 ? cart.map((item) => (
+                        <div key={item.cartId} className="flex items-center justify-between py-2">
+                            <div>
+                                <p className="font-semibold">{item.name} <span className="font-normal text-gray-600">x{item.quantity}</span></p>
+                                <p className="text-sm text-gray-500">{Object.values(item.options).join(', ')}</p>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                <p>NT$ {item.price * item.quantity}</p>
+                                <button onClick={() => handleRemoveItem(item.cartId)} className="text-red-500 p-1"><X size={16} /></button>
+                            </div>
+                        </div>
+                    )) : <p className="text-center text-gray-500 py-4">您的購物車是空的</p>}
+                </div>
+                <div className="p-4 border-t space-y-3">
+                    <div className="flex justify-between font-semibold"><span>福利錢包餘額</span><span>NT$ {user.walletBalance}</span></div>
+                    <div className="flex justify-between font-bold text-xl"><span>總計</span><span>NT$ {total}</span></div>
+                    <button onClick={() => onCheckout(total)} disabled={user.walletBalance < total || cart.length === 0} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-400">
+                        {user.walletBalance >= total ? '確認付款' : '餘額不足'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
-const GroupBuyDetailModal = ({ item, user, onClose, onJoin }) => {
+const GroupBuyDetailModal = ({ item, user, onClose, onStartPing, onJoinPing, activePings }) => {
       if (!item) return null;
-      const { timeLeft, isEnded } = useCountdown(item.endDate);
-      const hasJoined = (item.joinedBy || []).includes(user.id);
-      const isSuccess = item.current >= item.target;
-      const progress = Math.min((item.current / item.target) * 100, 100);
+      const userPing = activePings.find(p => p.itemId === item.id && p.members.includes(user.id));
+
+      if (userPing) {
+          return <PingStatusModal ping={userPing} item={item} user={user} onClose={onClose} />;
+      }
+      
+      const availablePings = activePings.filter(p => p.itemId === item.id && p.members.length < item.groupSize);
+
       return (
-          <div className="fixed inset-0 bg-white z-50 animate-fade-in">
-              <div className="h-full w-full flex flex-col" onClick={e => e.stopPropagation()}>
-                  <div className="bg-white sticky top-0 z-10 border-b border-gray-200">
-                      <div className="px-4 h-14 flex items-center justify-between">
-                          <button onClick={onClose} className="text-blue-600 font-semibold">取消</button>
-                          <h2 className="font-bold text-gray-800">限時團購</h2>
-                          <div className="w-12"></div> {/* Placeholder for centering */}
-                      </div>
-                  </div>
+          <div className="absolute inset-0 bg-white z-50 animate-fade-in">
+              <div className="h-full w-full flex flex-col">
+                  <div className="bg-white sticky top-0 z-10 border-b border-gray-200"><div className="px-4 h-14 flex items-center justify-between"><button onClick={onClose} className="text-blue-600 font-semibold">取消</button><h2 className="font-bold text-gray-800">商品詳情</h2><div className="w-12"></div></div></div>
                   <div className="flex-grow overflow-y-auto">
-                    <img src={item.imageUrl} alt={item.name} className="w-full h-64 object-cover" />
-                    <div className="p-4">
-                        <h2 className="text-3xl font-bold">{item.name}</h2>
-                        <div className="flex items-baseline space-x-2 mt-2"><p className="text-3xl font-bold text-red-500">NT${item.groupPrice}</p><p className="text-lg text-gray-500 line-through">NT${item.marketPrice}</p></div>
-                        <p className="text-gray-700 mt-4">{item.description}</p>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-white border-t">
-                      <div className="flex justify-between text-sm text-gray-600 mb-1">
-                          <span>進度: {item.current}/{item.target}</span>
-                          <div className="flex items-center font-semibold">
-                              <Clock size={14} className="mr-1" />
-                              <span>{isEnded ? "已截止" : `剩餘 ${timeLeft.days}天 ${timeLeft.hours}:${timeLeft.minutes}:${timeLeft.seconds}`}</span>
-                          </div>
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-64 object-cover" />
+                      <div className="p-4">
+                          <h2 className="text-3xl font-bold">{item.name}</h2>
+                          <p className="text-gray-700 mt-4">{item.description}</p>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                      <button onClick={() => onJoin(item.id)} disabled={hasJoined || isSuccess || isEnded} className={`mt-4 w-full font-bold py-4 rounded-lg transition-colors text-lg ${isEnded ? 'bg-red-500 text-white' : isSuccess ? 'bg-green-500 text-white' : hasJoined ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white active:bg-blue-700'}`}>{isEnded ? '已截止' : isSuccess ? '已成團' : hasJoined ? '您已跟團' : '立即跟團'}</button>
+                      {availablePings.length > 0 && (
+                          <div className="p-4">
+                              <h3 className="font-bold mb-2">進行中的團 (可直接加入)</h3>
+                              <div className="space-y-2">{availablePings.map(ping => <PingJoinCard key={ping.id} ping={ping} item={item} onJoinPing={onJoinPing} />)}</div>
+                          </div>
+                      )}
+                  </div>
+                  <div className="p-4 bg-white border-t grid grid-cols-2 gap-2">
+                      <button className="bg-gray-200 text-gray-800 font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.marketPrice}</span><span className="text-xs">單獨購買</span></button>
+                      <button onClick={() => onStartPing(item.id)} className="bg-red-500 text-white font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.groupPrice}</span><span className="text-xs">{item.groupSize}人拼團</span></button>
                   </div>
               </div>
           </div>
       );
-  };
+};
 
-// --- Main App Component ---
+const PingJoinCard = ({ ping, item, onJoinPing }) => {
+    const leader = users[ping.leader];
+    const { timeLeft, isEnded } = useCountdown(ping.endDate);
+    if (isEnded) return null;
+    return (
+        <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center">
+                <img src={leader.avatarUrl} className="w-10 h-10 rounded-full" />
+                <div className="ml-3">
+                    <p className="font-semibold">{leader.name} 的團</p>
+                    <p className="text-xs text-gray-500">還差 {item.groupSize - ping.members.length} 人，剩餘 {timeLeft.hours}:{timeLeft.minutes}:{timeLeft.seconds}</p>
+                </div>
+            </div>
+            <button onClick={() => onJoinPing(ping.id)} className="bg-red-500 text-white font-bold px-4 py-2 rounded-lg text-sm">加入</button>
+        </div>
+    );
+};
+
+const PingStatusModal = ({ ping, item, user, onClose }) => {
+    const { timeLeft, isEnded } = useCountdown(ping.endDate);
+    const isSuccess = ping.members.length >= item.groupSize;
+    const handleShare = () => {
+        // In a real app, use navigator.clipboard
+        alert(`已複製拼團連結！\n快來加入 ${users[ping.leader].name} 開的「${item.name}」團！還差 ${item.groupSize - ping.members.length} 人！`);
+    }
+
+    return (
+        <div className="absolute inset-0 bg-white z-50 animate-fade-in">
+            <div className="h-full w-full flex flex-col items-center p-4">
+                <div className="w-full flex justify-end"><button onClick={onClose} className="text-blue-600 font-semibold">完成</button></div>
+                <div className="text-center mt-8">
+                    <h2 className="text-2xl font-bold">{isSuccess ? "拼團成功！" : isEnded ? "拼團失敗" : "拼團中..."}</h2>
+                    <p className="text-gray-600 mt-2">{isSuccess ? "已為您成立訂單" : isEnded ? "已將款項退回您的錢包" : `還差 ${item.groupSize - ping.members.length} 人，快邀請同事加入！`}</p>
+                    <div className="mt-4 font-semibold text-2xl text-red-500">{isEnded || isSuccess ? "" : `${timeLeft.hours.toString().padStart(2, '0')}:${timeLeft.minutes.toString().padStart(2, '0')}:${timeLeft.seconds.toString().padStart(2, '0')}`}</div>
+                </div>
+                <div className="my-8 flex items-center space-x-2">
+                    {ping.members.map(memberId => <img key={memberId} src={users[memberId].avatarUrl} className="w-12 h-12 rounded-full border-2 border-white" />)}
+                    {[...Array(item.groupSize - ping.members.length)].map((_, i) => <div key={i} className="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center"><User className="text-gray-400" /></div>)}
+                </div>
+                <div className="w-full max-w-sm">
+                    <button onClick={handleShare} disabled={isSuccess || isEnded} className="w-full bg-red-500 text-white font-bold py-4 rounded-lg text-lg disabled:bg-gray-400">邀請同事加入</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- 主應用程式元件 ---
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [currentUser, setCurrentUser] = useState(users['user-1']);
@@ -207,6 +439,19 @@ export default function App() {
   const [favorites, setFavorites] = useState(currentUser.favorites);
   const [wishlist, setWishlist] = useState(initialWishlist);
   const [notifications, setNotifications] = useState(initialNotifications);
+  const [activePings, setActivePings] = useState([
+      { id: 'ping-1', itemId: 'gb-2', leader: 'user-2', members: ['user-2'], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
+  ]);
+  
+  const handleStartPing = (itemId) => {
+      const newPing = { id: `ping-${Date.now()}`, itemId: itemId, leader: currentUser.id, members: [currentUser.id], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
+      setActivePings([...activePings, newPing]);
+  };
+
+  const handleJoinPing = (pingId) => {
+      setActivePings(pings => pings.map(p => p.id === pingId ? { ...p, members: [...p.members, currentUser.id] } : p));
+  };
+
   const today = new Date().toISOString().slice(0, 10);
   const canCheckIn = currentUser.lastCheckIn !== today;
   const handleCheckIn = () => { if (canCheckIn) setCurrentUser({ ...currentUser, points: currentUser.points + 10, walletBalance: currentUser.walletBalance, lastCheckIn: today }); };
@@ -216,10 +461,26 @@ export default function App() {
   const handleWish = id => setWishlist(currentWishlist => currentWishlist.map(item => item.id === id && !item.wishedBy.includes(currentUser.id) ? { ...item, wishes: item.wishes + 1, wishedBy: [...item.wishedBy, currentUser.id] } : item).sort((a, b) => b.wishes - a.wishes));
   const handleAddWish = wishText => setWishlist(prev => [{ id: Date.now(), name: wishText, category: '其他', wishes: 1, wishedBy: [currentUser.id] }, ...prev].sort((a, b) => b.wishes - a.wishes));
   const handleJoinGroupBuy = id => setGroupBuys(prev => prev.map(item => item.id === id && !(item.joinedBy || []).includes(currentUser.id) ? { ...item, current: item.current + 1, joinedBy: [...(item.joinedBy || []), currentUser.id] } : item));
-  const handleCheckout = (total) => { setCurrentUser({...currentUser, walletBalance: currentUser.walletBalance - total}); setCart([]); setIsCartOpen(false); alert('訂購成功！'); setSelectedTeaStore(null); };
+  
+  const handleAddToCart = (itemToAdd) => {
+    setCart(prevCart => [...prevCart, { ...itemToAdd, cartId: Date.now() }]);
+  };
+
+  const handleCheckout = (total) => { 
+    if (currentUser.walletBalance < total) {
+        alert('餘額不足！');
+        return;
+    }
+    setCurrentUser({...currentUser, walletBalance: currentUser.walletBalance - total}); 
+    setCart([]); 
+    setIsCartOpen(false); 
+    alert('訂購成功！'); 
+    setSelectedTeaStore(null); 
+    setActiveTab('home');
+  };
 
   const renderContent = () => {
-    if (selectedTeaStore) return <TeaOrderScreen store={selectedTeaStore} menu={sampleMenu[selectedTeaStore.id]} cart={cart} setCart={setCart} onBack={() => setSelectedTeaStore(null)} />;
+    if (selectedTeaStore) return <TeaOrderScreen store={selectedTeaStore} menu={sampleMenu[selectedTeaStore.id]} onAddToCart={handleAddToCart} />;
     let content;
     switch(activeTab) {
         case 'home': content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />; break;
@@ -232,26 +493,33 @@ export default function App() {
     return <div key={activeTab} className="animate-fade-in">{content}</div>;
   };
 
-  const titles = { home: '特約商店', groupbuy: '限時團購', tea: '訂下午茶', wishlist: '許願池', profile: '個人資料' };
+  const titles = { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '個人資料' };
   const currentTitle = selectedTeaStore ? selectedTeaStore.name : titles[activeTab];
   
-  const StoreDetailModal = ({ store, user, onClose }) => { /* ... existing component ... */ };
-
   return (
-    <div className="bg-gray-100 min-h-screen font-sans">
-      <AppHeader 
-        title={currentTitle} 
-        onBack={() => setSelectedTeaStore(null)} 
-        showBackButton={!!selectedTeaStore} 
-        notifications={notifications} 
-        onMarkAllRead={handleMarkAllRead}
-        onProfileClick={() => setActiveTab('profile')}
-      />
-      <div className="relative pb-16">{renderContent()}</div>
-      {activeTab !== 'profile' && !selectedTeaStore && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
-      {cart.length > 0 && (<div className="fixed bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2"><ShoppingCart /><span className="font-bold">{cart.length}</span></button></div>)}
-      {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
-      <GroupBuyDetailModal item={selectedGroupBuy} user={currentUser} onClose={() => setSelectedGroupBuy(null)} onJoin={handleJoinGroupBuy} />
+    <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
+      <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
+        <AppHeader 
+          title={currentTitle} 
+          onBack={() => {
+              if(selectedTeaStore) setSelectedTeaStore(null);
+              else if (activeTab === 'profile') setActiveTab('home');
+          }}
+          showBackButton={!!selectedTeaStore || activeTab === 'profile'} 
+          notifications={notifications} 
+          onMarkAllRead={handleMarkAllRead}
+          onProfileClick={() => setActiveTab('profile')}
+        />
+        <div className="flex-grow overflow-y-auto">
+            <div className="pb-16">
+                {renderContent()}
+            </div>
+        </div>
+        {activeTab !== 'profile' && !selectedTeaStore && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
+        {cart.length > 0 && !isCartOpen && (<div className="absolute bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2 animate-bounce"><ShoppingCart /><span className="font-bold">{cart.reduce((acc, item) => acc + item.quantity, 0)}</span></button></div>)}
+        {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
+        <GroupBuyDetailModal item={selectedGroupBuy} user={currentUser} onClose={() => setSelectedGroupBuy(null)} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={activePings} />
+      </div>
     </div>
   );
 }
