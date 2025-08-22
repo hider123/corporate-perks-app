@@ -1,10 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone } from 'lucide-react';
 
 // --- 模擬資料 (平台模型) ---
 const companies = {
-  'company-a': { id: 'company-a', name: '卓越科技有限公司' },
-  'company-b': { id: 'company-b', name: '創新國際股份有限公司' },
+  'company-a': { 
+    id: 'company-a', 
+    name: '卓越科技有限公司',
+    address: '台北市信義區信義路五段7號 89樓',
+    phone: '02-8101-8888',
+    welfareId: 'WEL-TW-101'
+  },
+  'company-b': { 
+    id: 'company-b', 
+    name: '創新國際股份有限公司',
+    address: '新竹市東區科學園區工業東二路1號',
+    phone: '03-578-1234',
+    welfareId: 'WEL-HS-007'
+  },
 };
 
 const users = {
@@ -39,13 +51,43 @@ const sampleMenu = {
 const initialWishlist = [ { id: 1, name: '海底撈火鍋', category: '美食餐飲', wishes: 128, wishedBy: [] }];
 const initialNotifications = [ { id: 1, type: 'new_store', title: '新店家加入！', content: 'Cama Café 已加入特約行列！', timestamp: '2 小時前', read: false }];
 const initialGroupBuys = [
-    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', joinedBy: [] },
-    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', joinedBy: ['user-1'] },
+    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', joinedBy: [], endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', joinedBy: ['user-1'], endDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000).toISOString() },
+    { id: 'gb-3', name: '精品濾掛咖啡組', description: '嚴選阿拉比卡咖啡豆，中度烘焙帶有果香風味，讓您在辦公室也能享受一杯好咖啡。', marketPrice: 800, groupPrice: 550, groupSize: 5, imageUrl: 'https://placehold.co/600x400/795548/FFFFFF?text=咖啡組', joinedBy: [], endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }, // 模擬已結束
 ];
 
 const suggestionDatabase = [
   '路易莎咖啡 (LOUISA COFFEE)', '大苑子', '康是美', 'NET 主富服飾', '鼎泰豐', '鼎王麻辣鍋', 'IKEA 宜家家居', '家樂福 Carrefour', '全聯福利中心'
 ];
+
+// --- 模擬交易紀錄資料 ---
+const transactionHistoryData = {
+  'user-1': [
+    { id: 't1', type: 'purchase', description: '50嵐 - 珍珠奶茶', amount: -50, timestamp: '2025-08-22T10:30:00Z' },
+    { id: 't2', type: 'groupbuy_refund', description: '手作蛋捲禮盒 (拼團失敗退款)', amount: 380, timestamp: '2025-08-21T15:00:00Z' },
+    { id: 't3', type: 'topup', description: '福利金儲值', amount: 500, timestamp: '2025-08-21T09:00:00Z' },
+    { id: 't4', type: 'purchase', description: '威秀影城 - 電影票', amount: -240, timestamp: '2025-08-20T18:45:00Z' },
+  ],
+  'user-2': [
+     { id: 't5', type: 'purchase', description: '可不可熟成紅茶 - 白玉歐蕾', amount: -60, timestamp: '2025-08-22T12:30:00Z' },
+     { id: 't6', type: 'topup', description: '福利金儲值', amount: 500, timestamp: '2025-08-20T11:00:00Z' },
+  ],
+  'user-3': [],
+};
+
+// --- 模擬點數紀錄資料 ---
+const pointHistoryData = {
+  'user-1': [
+    { id: 'p1', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-22T08:00:00Z' },
+    { id: 'p2', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-21T08:05:00Z' },
+    { id: 'p3', type: 'special_event', description: '新用戶註冊獎勵', points: 100, timestamp: '2025-08-20T10:00:00Z' },
+  ],
+  'user-2': [
+    { id: 'p4', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-22T09:15:00Z' },
+  ],
+  'user-3': [],
+};
+
 
 // --- 用於倒數計時的 Custom Hook ---
 const useCountdown = (endDate) => {
@@ -59,6 +101,16 @@ const useCountdown = (endDate) => {
             return null;
         };
         const timer = setInterval(() => { const newTimeLeft = calculateTimeLeft(); if (newTimeLeft) { setTimeLeft(newTimeLeft); setIsEnded(false); } else { setIsEnded(true); clearInterval(timer); } }, 1000);
+        
+        // Initial calculation
+        const newTimeLeft = calculateTimeLeft();
+        if (newTimeLeft) {
+            setTimeLeft(newTimeLeft);
+            setIsEnded(false);
+        } else {
+            setIsEnded(true);
+        }
+
         return () => clearInterval(timer);
     }, [endDate]);
     return { timeLeft, isEnded };
@@ -174,24 +226,211 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     );
 };
 
-const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys }) => (
-    <main className="p-4 space-y-4"><div className="flex items-center space-x-4"><img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" /><div><h2 className="text-2xl font-bold">{currentUser.name}</h2><p className="text-gray-600">{companies[currentUser.companyId].name}</p></div></div><div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl shadow-lg p-5"><div className="flex justify-between items-center"><span className="text-sm opacity-80">福利錢包餘額</span><Wallet className="w-6 h-6 opacity-80" /></div><div className="mt-2 text-4xl font-bold tracking-wider">NT$ {currentUser.walletBalance.toLocaleString()}</div><div className="mt-4 flex space-x-4 text-sm"><button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">交易紀錄</button><button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">儲值</button></div></div><div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><div className="p-4 flex justify-between items-center"><div className="flex items-center space-x-3"><Award className="w-6 h-6 text-blue-500" /><span className="font-semibold">我的點數</span></div><span className="font-bold text-lg text-blue-800">{currentUser.points} 點</span></div><div className="border-t border-gray-200 p-4"><button onClick={onCheckIn} disabled={!canCheckIn} className={`font-bold py-3 rounded-lg w-full flex items-center justify-center space-x-2 transition-colors ${canCheckIn ? 'bg-green-500 text-white active:bg-green-600' : 'bg-gray-200 text-gray-500'}`}><CheckCircle /><span>{canCheckIn ? '每日簽到 (+10點)' : '今日已簽到'}</span></button></div></div><div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><h3 className="font-bold p-4">我的團購</h3><ul className="divide-y divide-gray-200">{groupBuys.filter(gb => (gb.joinedBy || []).includes(currentUser.id)).map(gb => (<li key={gb.id} className="flex justify-between items-center p-4 text-sm active:bg-gray-100 transition-colors cursor-pointer"><p>{gb.name}</p><div className="flex items-center"><span className={`font-semibold text-xs px-2 py-1 rounded-full ${gb.current >= gb.target ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{gb.current >= gb.target ? '已成團' : '進行中'}</span><ChevronRight className="w-5 h-5 text-gray-400 ml-2" /></div></li>))}</ul></div><button onClick={onSwitchUser} className="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg w-full active:bg-gray-300">切換使用者 (展示用)</button></main>
+const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys, onViewTransactions, onViewPoints, onViewCompanyInfo }) => (
+    <main className="p-4 space-y-4">
+        <div className="flex items-center space-x-4">
+            <img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" />
+            <div>
+                <h2 className="text-2xl font-bold">{currentUser.name}</h2>
+                <button onClick={onViewCompanyInfo} className="text-gray-600 hover:text-blue-600 transition-colors text-left">
+                    <p>{companies[currentUser.companyId].name}</p>
+                </button>
+            </div>
+        </div>
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl shadow-lg p-5">
+            <div className="flex justify-between items-center">
+                <span className="text-sm opacity-80">福利錢包餘額</span>
+                <Wallet className="w-6 h-6 opacity-80" />
+            </div>
+            <div className="mt-2 text-4xl font-bold tracking-wider">NT$ {currentUser.walletBalance.toLocaleString()}</div>
+            <div className="mt-4 flex space-x-4 text-sm">
+                <button onClick={onViewTransactions} className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">交易紀錄</button>
+                <button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">儲值</button>
+            </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button onClick={onViewPoints} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors">
+                <div className="flex items-center space-x-3">
+                    <Award className="w-6 h-6 text-blue-500" />
+                    <span className="font-semibold">我的點數</span>
+                </div>
+                <div className="flex items-center">
+                    <span className="font-bold text-lg text-blue-800">{currentUser.points} 點</span>
+                    <ChevronRight className="w-5 h-5 text-gray-400 ml-2" />
+                </div>
+            </button>
+            <div className="border-t border-gray-200 p-4">
+                <button onClick={onCheckIn} disabled={!canCheckIn} className={`font-bold py-3 rounded-lg w-full flex items-center justify-center space-x-2 transition-colors ${canCheckIn ? 'bg-green-500 text-white active:bg-green-600' : 'bg-gray-200 text-gray-500'}`}>
+                    <CheckCircle />
+                    <span>{canCheckIn ? '每日簽到 (+10點)' : '今日已簽到'}</span>
+                </button>
+            </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <h3 className="font-bold p-4">我的團購</h3>
+            <ul className="divide-y divide-gray-200">
+                {groupBuys.filter(gb => (gb.joinedBy || []).includes(currentUser.id)).map(gb => (
+                    <li key={gb.id} className="flex justify-between items-center p-4 text-sm active:bg-gray-100 transition-colors cursor-pointer">
+                        <p>{gb.name}</p>
+                        <div className="flex items-center">
+                            <span className={`font-semibold text-xs px-2 py-1 rounded-full ${gb.current >= gb.target ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                {gb.current >= gb.target ? '已成團' : '進行中'}
+                            </span>
+                            <ChevronRight className="w-5 h-5 text-gray-400 ml-2" />
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </div>
+        <button onClick={onSwitchUser} className="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg w-full active:bg-gray-300">切換使用者 (展示用)</button>
+    </main>
 );
 
-const GroupBuyCard = ({ item, onSelect }) => (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-95 transition-transform duration-150" onClick={() => onSelect(item)}>
-        <img src={item.imageUrl} alt={item.name} className="w-full h-40 object-cover" />
-        <div className="p-4">
-            <h3 className="font-bold text-lg truncate">{item.name}</h3>
-            <div className="flex items-baseline space-x-2 mt-1">
-                <span className="text-sm font-semibold text-red-500 bg-red-100 px-2 py-1 rounded">{item.groupSize}人成團</span>
-                <p className="text-2xl font-bold text-red-500">NT${item.groupPrice}</p>
+// --- 交易紀錄頁面 ---
+const TransactionHistoryScreen = ({ transactions }) => {
+    const getTransactionIcon = (type) => {
+        switch (type) {
+            case 'purchase': return <ShoppingCart className="w-6 h-6 text-red-500" />;
+            case 'topup': return <Wallet className="w-6 h-6 text-green-500" />;
+            case 'groupbuy_refund': return <Users className="w-6 h-6 text-blue-500" />;
+            default: return <Clock className="w-6 h-6 text-gray-500" />;
+        }
+    };
+
+    const formatTimestamp = (isoString) => {
+        const date = new Date(isoString);
+        return date.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    return (
+        <main className="p-4">
+            {transactions.length > 0 ? (
+                <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+                    {transactions.map(tx => (
+                        <li key={tx.id} className="p-4 flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                {getTransactionIcon(tx.type)}
+                                <div>
+                                    <p className="font-semibold text-gray-800">{tx.description}</p>
+                                    <p className="text-sm text-gray-500">{formatTimestamp(tx.timestamp)}</p>
+                                </div>
+                            </div>
+                            <p className={`font-bold text-lg ${tx.amount > 0 ? 'text-green-600' : 'text-gray-800'}`}>
+                                {tx.amount > 0 ? `+${tx.amount.toLocaleString()}` : tx.amount.toLocaleString()}
+                            </p>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="text-center py-20">
+                    <p className="text-gray-500">目前沒有任何交易紀錄。</p>
+                </div>
+            )}
+        </main>
+    );
+};
+
+// --- 點數紀錄頁面 ---
+const PointHistoryScreen = ({ pointsHistory }) => {
+    const getPointIcon = (type) => {
+        switch (type) {
+            case 'checkin': return <CheckCircle className="w-6 h-6 text-green-500" />;
+            case 'special_event': return <Gift className="w-6 h-6 text-yellow-500" />;
+            default: return <Award className="w-6 h-6 text-blue-500" />;
+        }
+    };
+
+    const formatTimestamp = (isoString) => {
+        const date = new Date(isoString);
+        return date.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+    };
+
+    return (
+        <main className="p-4">
+            {pointsHistory.length > 0 ? (
+                <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+                    {pointsHistory.map(ph => (
+                        <li key={ph.id} className="p-4 flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                {getPointIcon(ph.type)}
+                                <div>
+                                    <p className="font-semibold text-gray-800">{ph.description}</p>
+                                    <p className="text-sm text-gray-500">{formatTimestamp(ph.timestamp)}</p>
+                                </div>
+                            </div>
+                            <p className="font-bold text-lg text-green-600">
+                                +{ph.points}
+                            </p>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <div className="text-center py-20">
+                    <p className="text-gray-500">目前沒有任何點數紀錄。</p>
+                </div>
+            )}
+        </main>
+    );
+};
+
+
+const GroupBuyCard = ({ item, onSelect }) => {
+    const { timeLeft, isEnded } = useCountdown(item.endDate);
+
+    const timerString = () => {
+        if (isEnded) return "已結束";
+        
+        const days = timeLeft.days > 0 ? `${timeLeft.days} 天 ` : '';
+        const hours = `${String(timeLeft.hours).padStart(2, '0')}`;
+        const minutes = `${String(timeLeft.minutes).padStart(2, '0')}`;
+        const seconds = `${String(timeLeft.seconds).padStart(2, '0')}`;
+
+        return `剩餘 ${days}${hours}:${minutes}:${seconds}`;
+    };
+
+    return (
+        <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden transition-all duration-150 ${isEnded ? 'opacity-50' : 'active:scale-95'}`} onClick={() => !isEnded && onSelect(item)}>
+            <img src={item.imageUrl} alt={item.name} className="w-full h-40 object-cover" />
+            <div className="p-4">
+                <h3 className="font-bold text-lg truncate">{item.name}</h3>
+                <div className="flex items-baseline space-x-2 mt-1">
+                    <span className="text-sm font-semibold text-red-500 bg-red-100 px-2 py-1 rounded">{item.groupSize}人成團</span>
+                    <p className="text-2xl font-bold text-red-500">NT${item.groupPrice}</p>
+                </div>
+                <p className="text-sm text-gray-500 line-through mt-1">單獨購買 NT${item.marketPrice}</p>
+                 <div className={`mt-2 flex items-center text-sm ${isEnded ? 'text-gray-500' : 'text-orange-600'}`}>
+                    <Clock size={16} className="mr-1.5" />
+                    <span className="font-semibold">{timerString()}</span>
+                </div>
             </div>
-            <p className="text-sm text-gray-500 line-through mt-1">單獨購買 NT${item.marketPrice}</p>
         </div>
-    </div>
-);
-const GroupBuyScreen = ({ groupBuys, onSelect }) => (<main className="p-4 space-y-4">{groupBuys.map(item => <GroupBuyCard key={item.id} item={item} onSelect={onSelect} />)}</main>);
+    );
+};
+const GroupBuyScreen = ({ groupBuys, onSelect }) => {
+    const now = new Date();
+    const activeGroupBuys = groupBuys.filter(item => new Date(item.endDate) > now);
+    const endedGroupBuys = groupBuys.filter(item => new Date(item.endDate) <= now);
+
+    return (
+        <main className="p-4 space-y-4">
+            {activeGroupBuys.length > 0 ? (
+                activeGroupBuys.map(item => <GroupBuyCard key={item.id} item={item} onSelect={onSelect} />)
+            ) : (
+                <div className="text-center py-16">
+                    <p className="text-gray-500">目前沒有進行中的拼團活動。</p>
+                </div>
+            )}
+            {endedGroupBuys.length > 0 && (
+                <div>
+                    <h3 className="text-sm font-bold text-gray-500 my-4 text-center">--- 已結束的活動 ---</h3>
+                    <div className="space-y-4">
+                       {endedGroupBuys.map(item => <GroupBuyCard key={item.id} item={item} onSelect={onSelect} />)}
+                    </div>
+                </div>
+            )}
+        </main>
+    );
+};
 
 const AfternoonTeaScreen = ({ onSelectStore }) => (<main className="p-4 space-y-3">{teaStores.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
 
@@ -384,13 +623,20 @@ const PingJoinCard = ({ ping, item, onJoinPing }) => {
     const leader = users[ping.leader];
     const { timeLeft, isEnded } = useCountdown(ping.endDate);
     if (isEnded) return null;
+
+    const daysText = timeLeft.days > 0 ? `${timeLeft.days}天 ` : '';
+    const hoursText = `${String(timeLeft.hours).padStart(2, '0')}`;
+    const minutesText = `${String(timeLeft.minutes).padStart(2, '0')}`;
+    const secondsText = `${String(timeLeft.seconds).padStart(2, '0')}`;
+    const countdownText = `剩餘 ${daysText}${hoursText}:${minutesText}:${secondsText}`;
+
     return (
         <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center">
                 <img src={leader.avatarUrl} className="w-10 h-10 rounded-full" />
                 <div className="ml-3">
                     <p className="font-semibold">{leader.name} 的團</p>
-                    <p className="text-xs text-gray-500">還差 {item.groupSize - ping.members.length} 人，剩餘 {timeLeft.hours}:{timeLeft.minutes}:{timeLeft.seconds}</p>
+                    <p className="text-xs text-gray-500">還差 {item.groupSize - ping.members.length} 人，{countdownText}</p>
                 </div>
             </div>
             <button onClick={() => onJoinPing(ping.id)} className="bg-red-500 text-white font-bold px-4 py-2 rounded-lg text-sm">加入</button>
@@ -406,6 +652,12 @@ const PingStatusModal = ({ ping, item, user, onClose }) => {
         alert(`已複製拼團連結！\n快來加入 ${users[ping.leader].name} 開的「${item.name}」團！還差 ${item.groupSize - ping.members.length} 人！`);
     }
 
+    const daysText = timeLeft.days > 0 ? `${timeLeft.days}天 ` : '';
+    const hoursText = `${String(timeLeft.hours).padStart(2, '0')}`;
+    const minutesText = `${String(timeLeft.minutes).padStart(2, '0')}`;
+    const secondsText = `${String(timeLeft.seconds).padStart(2, '0')}`;
+    const countdownText = `${daysText}${hoursText}:${minutesText}:${secondsText}`;
+
     return (
         <div className="absolute inset-0 bg-white z-50 animate-fade-in">
             <div className="h-full w-full flex flex-col items-center p-4">
@@ -413,7 +665,7 @@ const PingStatusModal = ({ ping, item, user, onClose }) => {
                 <div className="text-center mt-8">
                     <h2 className="text-2xl font-bold">{isSuccess ? "拼團成功！" : isEnded ? "拼團失敗" : "拼團中..."}</h2>
                     <p className="text-gray-600 mt-2">{isSuccess ? "已為您成立訂單" : isEnded ? "已將款項退回您的錢包" : `還差 ${item.groupSize - ping.members.length} 人，快邀請同事加入！`}</p>
-                    <div className="mt-4 font-semibold text-2xl text-red-500">{isEnded || isSuccess ? "" : `${timeLeft.hours.toString().padStart(2, '0')}:${timeLeft.minutes.toString().padStart(2, '0')}:${timeLeft.seconds.toString().padStart(2, '0')}`}</div>
+                    <div className="mt-4 font-semibold text-2xl text-red-500">{isEnded || isSuccess ? "" : countdownText}</div>
                 </div>
                 <div className="my-8 flex items-center space-x-2">
                     {ping.members.map(memberId => <img key={memberId} src={users[memberId].avatarUrl} className="w-12 h-12 rounded-full border-2 border-white" />)}
@@ -427,6 +679,61 @@ const PingStatusModal = ({ ping, item, user, onClose }) => {
     );
 };
 
+// --- 公司資訊彈窗 ---
+const CompanyInfoModal = ({ company, onClose }) => {
+    if (!company) return null;
+
+    return (
+        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-center p-4" onClick={onClose}>
+            <div
+                className="bg-white rounded-2xl w-full max-w-sm animate-fade-in-up"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-4 border-b text-center relative">
+                    <h3 className="font-bold text-lg">公司資訊</h3>
+                    <button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4 p-1 rounded-full active:bg-gray-200"><X size={20}/></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="flex items-start space-x-3">
+                        <Building className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm text-gray-500">公司名稱</p>
+                            <p className="font-semibold">{company.name}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                        <MapPin className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm text-gray-500">公司地址</p>
+                            <p className="font-semibold">{company.address}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                        <Phone className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm text-gray-500">連絡電話</p>
+                            <p className="font-semibold">{company.phone}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                        <Tag className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm text-gray-500">福委會編號</p>
+                            <p className="font-semibold">{company.welfareId}</p>
+                        </div>
+                    </div>
+                </div>
+                 <div className="p-4 bg-gray-50 rounded-b-2xl">
+                    <button onClick={onClose} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700">
+                        關閉
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- 主應用程式元件 ---
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -439,6 +746,11 @@ export default function App() {
   const [favorites, setFavorites] = useState(currentUser.favorites);
   const [wishlist, setWishlist] = useState(initialWishlist);
   const [notifications, setNotifications] = useState(initialNotifications);
+  const [transactions, setTransactions] = useState(transactionHistoryData);
+  const [pointsHistory, setPointsHistory] = useState(pointHistoryData);
+  const [isViewingTransactions, setIsViewingTransactions] = useState(false);
+  const [isViewingPoints, setIsViewingPoints] = useState(false);
+  const [isCompanyInfoOpen, setIsCompanyInfoOpen] = useState(false);
   const [activePings, setActivePings] = useState([
       { id: 'ping-1', itemId: 'gb-2', leader: 'user-2', members: ['user-2'], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
   ]);
@@ -454,9 +766,31 @@ export default function App() {
 
   const today = new Date().toISOString().slice(0, 10);
   const canCheckIn = currentUser.lastCheckIn !== today;
-  const handleCheckIn = () => { if (canCheckIn) setCurrentUser({ ...currentUser, points: currentUser.points + 10, walletBalance: currentUser.walletBalance, lastCheckIn: today }); };
+  
+  const handleCheckIn = () => { 
+      if (canCheckIn) {
+          const newPointRecord = {
+              id: `p-${Date.now()}`,
+              type: 'checkin',
+              description: '每日簽到',
+              points: 10,
+              timestamp: new Date().toISOString()
+          };
+          setPointsHistory(prev => ({
+              ...prev,
+              [currentUser.id]: [newPointRecord, ...(prev[currentUser.id] || [])]
+          }));
+          setCurrentUser({ ...currentUser, points: currentUser.points + 10, lastCheckIn: today }); 
+      }
+  };
+
   const handleMarkAllRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
-  const handleSwitchUser = () => { const nextUser = currentUser.id === 'user-1' ? users['user-2'] : users['user-1']; setCurrentUser(nextUser); setFavorites(nextUser.favorites); };
+  const handleSwitchUser = () => { 
+      const nextUserId = currentUser.id === 'user-1' ? 'user-2' : 'user-1';
+      const nextUser = users[nextUserId];
+      setCurrentUser(nextUser); 
+      setFavorites(nextUser.favorites); 
+  };
   const handleToggleFavorite = storeId => setFavorites(prev => prev.includes(storeId) ? prev.filter(id => id !== storeId) : [...prev, storeId]);
   const handleWish = id => setWishlist(currentWishlist => currentWishlist.map(item => item.id === id && !item.wishedBy.includes(currentUser.id) ? { ...item, wishes: item.wishes + 1, wishedBy: [...item.wishedBy, currentUser.id] } : item).sort((a, b) => b.wishes - a.wishes));
   const handleAddWish = wishText => setWishlist(prev => [{ id: Date.now(), name: wishText, category: '其他', wishes: 1, wishedBy: [currentUser.id] }, ...prev].sort((a, b) => b.wishes - a.wishes));
@@ -471,6 +805,20 @@ export default function App() {
         alert('餘額不足！');
         return;
     }
+
+    const newTransaction = {
+        id: `t-${Date.now()}`,
+        type: 'purchase',
+        description: cart.map(item => `${item.name} x${item.quantity}`).join(', '),
+        amount: -total,
+        timestamp: new Date().toISOString()
+    };
+    
+    setTransactions(prev => ({
+        ...prev,
+        [currentUser.id]: [newTransaction, ...(prev[currentUser.id] || [])]
+    }));
+
     setCurrentUser({...currentUser, walletBalance: currentUser.walletBalance - total}); 
     setCart([]); 
     setIsCartOpen(false); 
@@ -480,45 +828,75 @@ export default function App() {
   };
 
   const renderContent = () => {
-    if (selectedTeaStore) return <TeaOrderScreen store={selectedTeaStore} menu={sampleMenu[selectedTeaStore.id]} onAddToCart={handleAddToCart} />;
+    if (isViewingTransactions) {
+        return <TransactionHistoryScreen transactions={transactions[currentUser.id] || []} />;
+    }
+    if (isViewingPoints) {
+        return <PointHistoryScreen pointsHistory={pointsHistory[currentUser.id] || []} />;
+    }
+    if (selectedTeaStore) {
+        return <TeaOrderScreen store={selectedTeaStore} menu={sampleMenu[selectedTeaStore.id]} onAddToCart={handleAddToCart} />;
+    }
+    
     let content;
     switch(activeTab) {
         case 'home': content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />; break;
         case 'groupbuy': content = <GroupBuyScreen groupBuys={groupBuys} onSelect={setSelectedGroupBuy} />; break;
         case 'tea': content = <AfternoonTeaScreen onSelectStore={setSelectedTeaStore} />; break;
         case 'wishlist': content = <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />; break;
-        case 'profile': content = <ProfileScreen currentUser={currentUser} onSwitchUser={handleSwitchUser} onCheckIn={handleCheckIn} canCheckIn={canCheckIn} groupBuys={groupBuys} />; break;
+        case 'profile': content = <ProfileScreen currentUser={currentUser} onSwitchUser={handleSwitchUser} onCheckIn={handleCheckIn} canCheckIn={canCheckIn} groupBuys={groupBuys} onViewTransactions={() => setIsViewingTransactions(true)} onViewPoints={() => setIsViewingPoints(true)} onViewCompanyInfo={() => setIsCompanyInfoOpen(true)} />; break;
         default: content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
     }
     return <div key={activeTab} className="animate-fade-in">{content}</div>;
   };
 
-  const titles = { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '個人資料' };
-  const currentTitle = selectedTeaStore ? selectedTeaStore.name : titles[activeTab];
+  const getTitle = () => {
+      if (isViewingTransactions) return '交易紀錄';
+      if (isViewingPoints) return '點數紀錄';
+      if (selectedTeaStore) return selectedTeaStore.name;
+      return { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '個人資料' }[activeTab];
+  };
   
+  const showBackButton = isViewingTransactions || isViewingPoints || !!selectedTeaStore || activeTab === 'profile';
+
+  const handleBack = () => {
+      if (isViewingTransactions) {
+          setIsViewingTransactions(false);
+      } else if (isViewingPoints) {
+          setIsViewingPoints(false);
+      } else if (selectedTeaStore) {
+          setSelectedTeaStore(null);
+      } else if (activeTab === 'profile') {
+          setActiveTab('home');
+      }
+  };
+
   return (
     <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
       <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
         <AppHeader 
-          title={currentTitle} 
-          onBack={() => {
-              if(selectedTeaStore) setSelectedTeaStore(null);
-              else if (activeTab === 'profile') setActiveTab('home');
-          }}
-          showBackButton={!!selectedTeaStore || activeTab === 'profile'} 
+          title={getTitle()} 
+          onBack={handleBack}
+          showBackButton={showBackButton} 
           notifications={notifications} 
           onMarkAllRead={handleMarkAllRead}
-          onProfileClick={() => setActiveTab('profile')}
+          onProfileClick={() => {
+              setIsViewingTransactions(false);
+              setIsViewingPoints(false);
+              setSelectedTeaStore(null);
+              setActiveTab('profile');
+          }}
         />
         <div className="flex-grow overflow-y-auto">
             <div className="pb-16">
                 {renderContent()}
             </div>
         </div>
-        {activeTab !== 'profile' && !selectedTeaStore && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
+        {activeTab !== 'profile' && !selectedTeaStore && !isViewingTransactions && !isViewingPoints && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
         {cart.length > 0 && !isCartOpen && (<div className="absolute bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2 animate-bounce"><ShoppingCart /><span className="font-bold">{cart.reduce((acc, item) => acc + item.quantity, 0)}</span></button></div>)}
         {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
         <GroupBuyDetailModal item={selectedGroupBuy} user={currentUser} onClose={() => setSelectedGroupBuy(null)} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={activePings} />
+        {isCompanyInfoOpen && <CompanyInfoModal company={companies[currentUser.companyId]} onClose={() => setIsCompanyInfoOpen(false)} />}
       </div>
     </div>
   );
