@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone, Loader2 } from 'lucide-react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone, Loader2, LogOut } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+
 
 // --- Firebase 設定 ---
 const firebaseConfig = {
@@ -16,10 +18,10 @@ const firebaseConfig = {
 // 初始化 Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 
 // --- 模擬資料 (平台模型) ---
-// 注意：'stores' 資料現在將從 Firebase 讀取，我們保留其他模擬資料暫時使用。
 const companies = {
   'company-a': { 
     id: 'company-a', 
@@ -35,12 +37,6 @@ const companies = {
     phone: '03-578-1234',
     welfareId: 'WEL-HS-007'
   },
-};
-
-const users = {
-  'user-1': { id: 'user-1', name: '王大明', companyId: 'company-a', avatarUrl: 'https://placehold.co/100x100/7F9CF5/FFFFFF?text=王', favorites: [2, 4], points: 1250, lastCheckIn: '2025-08-19', walletBalance: 500 },
-  'user-2': { id: 'user-2', name: '陳小美', companyId: 'company-b', avatarUrl: 'https://placehold.co/100x100/F5A623/FFFFFF?text=陳', favorites: [1], points: 800, lastCheckIn: '2025-08-20', walletBalance: 350 },
-  'user-3': { id: 'user-3', name: '李經理', companyId: 'company-a', avatarUrl: 'https://placehold.co/100x100/4A5568/FFFFFF?text=李', favorites: [], points: 2000, lastCheckIn: '2025-08-20', walletBalance: 1500 },
 };
 
 const categories = ['美食餐飲', '休閒娛樂', '生活百貨', '美容美髮', '交通出行', '學習成長'];
@@ -81,11 +77,6 @@ const transactionHistoryData = {
     { id: 't3', type: 'topup', description: '福利金儲值', amount: 500, timestamp: '2025-08-21T09:00:00Z' },
     { id: 't4', type: 'purchase', description: '威秀影城 - 電影票', amount: -240, timestamp: '2025-08-20T18:45:00Z' },
   ],
-  'user-2': [
-     { id: 't5', type: 'purchase', description: '可不可熟成紅茶 - 白玉歐蕾', amount: -60, timestamp: '2025-08-22T12:30:00Z' },
-     { id: 't6', type: 'topup', description: '福利金儲值', amount: 500, timestamp: '2025-08-20T11:00:00Z' },
-  ],
-  'user-3': [],
 };
 
 // --- 模擬點數紀錄資料 ---
@@ -95,10 +86,6 @@ const pointHistoryData = {
     { id: 'p2', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-21T08:05:00Z' },
     { id: 'p3', type: 'special_event', description: '新用戶註冊獎勵', points: 100, timestamp: '2025-08-20T10:00:00Z' },
   ],
-  'user-2': [
-    { id: 'p4', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-22T09:15:00Z' },
-  ],
-  'user-3': [],
 };
 
 
@@ -239,14 +226,14 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     );
 };
 
-const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys, onViewTransactions, onViewPoints, onViewCompanyInfo }) => (
+const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys, onViewTransactions, onViewPoints, onViewCompanyInfo, onLogout }) => (
     <main className="p-4 space-y-4">
         <div className="flex items-center space-x-4">
             <img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" />
             <div>
                 <h2 className="text-2xl font-bold">{currentUser.name}</h2>
                 <button onClick={onViewCompanyInfo} className="text-gray-600 hover:text-blue-600 transition-colors text-left">
-                    <p>{companies[currentUser.companyId].name}</p>
+                    <p>{companies[currentUser.companyId]?.name || '未知公司'}</p>
                 </button>
             </div>
         </div>
@@ -279,23 +266,10 @@ const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, group
                 </button>
             </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <h3 className="font-bold p-4">我的團購</h3>
-            <ul className="divide-y divide-gray-200">
-                {groupBuys.filter(gb => (gb.joinedBy || []).includes(currentUser.id)).map(gb => (
-                    <li key={gb.id} className="flex justify-between items-center p-4 text-sm active:bg-gray-100 transition-colors cursor-pointer">
-                        <p>{gb.name}</p>
-                        <div className="flex items-center">
-                            <span className={`font-semibold text-xs px-2 py-1 rounded-full ${gb.current >= gb.target ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {gb.current >= gb.target ? '已成團' : '進行中'}
-                            </span>
-                            <ChevronRight className="w-5 h-5 text-gray-400 ml-2" />
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </div>
-        <button onClick={onSwitchUser} className="bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg w-full active:bg-gray-300">切換使用者 (展示用)</button>
+        <button onClick={onLogout} className="bg-red-500 text-white font-bold py-3 px-6 rounded-lg w-full active:bg-red-600 flex items-center justify-center space-x-2">
+            <LogOut size={20} />
+            <span>登出</span>
+        </button>
     </main>
 );
 
@@ -746,21 +720,210 @@ const CompanyInfoModal = ({ company, onClose }) => {
     );
 };
 
+// --- 登入/註冊頁面 ---
+const AuthScreen = ({ onAuthSuccess }) => {
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleAuthAction = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+            // onAuthStateChanged 會處理後續邏輯
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center justify-center h-full p-8 bg-gray-50">
+            <h1 className="text-3xl font-bold text-blue-600 mb-2">企業福利平台</h1>
+            <p className="text-gray-500 mb-8">{isLogin ? '登入您的帳戶' : '建立一個新帳戶'}</p>
+            <form onSubmit={handleAuthAction} className="w-full space-y-4">
+                <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="電子郵件"
+                    className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                />
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="密碼"
+                    className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                />
+                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
+                >
+                    {isLoading && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                    {isLogin ? '登入' : '註冊'}
+                </button>
+            </form>
+            <button onClick={() => setIsLogin(!isLogin)} className="mt-4 text-sm text-blue-600 hover:underline">
+                {isLogin ? '還沒有帳戶嗎？註冊一個' : '已經有帳戶了？直接登入'}
+            </button>
+        </div>
+    );
+};
+
+// --- [新] 新用戶註冊資料頁面 ---
+const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [companyId, setCompanyId] = useState('');
+    const [companySearch, setCompanySearch] = useState('');
+    const [companySuggestions, setCompanySuggestions] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleCompanySearch = (e) => {
+        const query = e.target.value;
+        setCompanySearch(query);
+        setCompanyId(''); // 清除已選定的公司
+        if (query.length > 0) {
+            const suggestions = Object.values(companies).filter(c => 
+                c.name.toLowerCase().includes(query.toLowerCase())
+            );
+            setCompanySuggestions(suggestions);
+        } else {
+            setCompanySuggestions([]);
+        }
+    };
+
+    const selectCompany = (company) => {
+        setCompanyId(company.id);
+        setCompanySearch(company.name);
+        setCompanySuggestions([]);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!name.trim() || !phone.trim() || !companyId) {
+            setError('所有欄位皆為必填，且需從列表中選擇一間公司');
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+
+        const newUserProfile = {
+            name: name.trim(),
+            phone: phone.trim(),
+            companyId,
+            email: firebaseUser.email,
+            avatarUrl: `https://placehold.co/100x100/CCCCCC/FFFFFF?text=${name.trim()[0]}`,
+            favorites: [],
+            points: 100, // 新用戶獎勵點數
+            lastCheckIn: '',
+            walletBalance: 0,
+        };
+
+        try {
+            await setDoc(doc(db, "users", firebaseUser.uid), newUserProfile);
+            onRegistrationComplete({ id: firebaseUser.uid, ...newUserProfile });
+        } catch (err) {
+            console.error("寫入使用者資料失敗:", err);
+            setError("儲存資料失敗，請稍後再試。");
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full p-8 bg-gray-50">
+            <h1 className="text-3xl font-bold text-blue-600 mb-2">建立個人檔案</h1>
+            <p className="text-gray-500 mb-8">只差一步！請完成您的個人資料。</p>
+            <form onSubmit={handleSubmit} className="w-full space-y-4 flex-grow flex flex-col">
+                <div className="space-y-4">
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="姓名"
+                        className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                    <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="電話號碼"
+                        className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={companySearch}
+                            onChange={handleCompanySearch}
+                            placeholder="輸入公司名稱搜尋"
+                            className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                        {companySuggestions.length > 0 && (
+                            <ul className="absolute top-full mt-1 w-full bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+                                {companySuggestions.map(c => (
+                                    <li 
+                                        key={c.id} 
+                                        onClick={() => selectCompany(c)} 
+                                        className="p-3 hover:bg-gray-100 cursor-pointer text-sm"
+                                    >
+                                        {c.name}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                <div className="mt-auto">
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
+                    >
+                        {isLoading && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                        完成註冊
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
 
 // --- 主應用程式元件 ---
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
-  const [currentUser, setCurrentUser] = useState(users['user-1']);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
   const [selectedTeaStore, setSelectedTeaStore] = useState(null);
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [groupBuys, setGroupBuys] = useState(initialGroupBuys);
   const [selectedGroupBuy, setSelectedGroupBuy] = useState(null);
-  const [favorites, setFavorites] = useState(currentUser.favorites);
+  const [favorites, setFavorites] = useState([]);
   const [wishlist, setWishlist] = useState(initialWishlist);
   const [notifications, setNotifications] = useState(initialNotifications);
-  const [transactions, setTransactions] = useState(transactionHistoryData);
-  const [pointsHistory, setPointsHistory] = useState(pointHistoryData);
+  const [transactions, setTransactions] = useState({});
+  const [pointsHistory, setPointsHistory] = useState({});
   const [isViewingTransactions, setIsViewingTransactions] = useState(false);
   const [isViewingPoints, setIsViewingPoints] = useState(false);
   const [isCompanyInfoOpen, setIsCompanyInfoOpen] = useState(false);
@@ -771,36 +934,56 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setIsLoading(true);
+      if (user) {
+        setFirebaseUser(user);
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists() && userDocSnap.data().name) {
+          setCurrentUser({ id: user.uid, ...userDocSnap.data() });
+          setIsProfileIncomplete(false);
+        } else {
+          setIsProfileIncomplete(true);
+          setCurrentUser(null);
+        }
+      } else {
+        setFirebaseUser(null);
+        setCurrentUser(null);
+        setIsProfileIncomplete(false);
+      }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const fetchStores = async () => {
       try {
-        // 模擬網路延遲
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // 這裡我們暫時用模擬資料來代替真實的 Firestore 呼叫
-        // 在真實情境中，您會取消註解下面的 Firestore 程式碼
+        await new Promise(resolve => setTimeout(resolve, 1000));
         const mockStores = [
           { id: 1, name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
           { id: 2, name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
         ];
         setStores(mockStores);
-
-        /*
-        // --- 真實 Firestore 讀取程式碼 ---
-        const querySnapshot = await getDocs(collection(db, "stores"));
-        const storesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setStores(storesData);
-        */
-
       } catch (error) {
         console.error("讀取商店資料失敗:", error);
-        // 可以在這裡設定錯誤狀態並顯示錯誤訊息
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    fetchStores();
-  }, []);
+    if (firebaseUser && !isProfileIncomplete) {
+        fetchStores();
+    }
+  }, [firebaseUser, isProfileIncomplete]);
+
+  const handleRegistrationComplete = (newProfile) => {
+      setCurrentUser(newProfile);
+      setIsProfileIncomplete(false);
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
 
   const handleStartPing = (itemId) => {
       const newPing = { id: `ping-${Date.now()}`, itemId: itemId, leader: currentUser.id, members: [currentUser.id], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
@@ -812,7 +995,7 @@ export default function App() {
   };
 
   const today = new Date().toISOString().slice(0, 10);
-  const canCheckIn = currentUser.lastCheckIn !== today;
+  const canCheckIn = currentUser?.lastCheckIn !== today;
   
   const handleCheckIn = () => { 
       if (canCheckIn) {
@@ -832,12 +1015,6 @@ export default function App() {
   };
 
   const handleMarkAllRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
-  const handleSwitchUser = () => { 
-      const nextUserId = currentUser.id === 'user-1' ? 'user-2' : 'user-1';
-      const nextUser = users[nextUserId];
-      setCurrentUser(nextUser); 
-      setFavorites(nextUser.favorites); 
-  };
   const handleToggleFavorite = storeId => setFavorites(prev => prev.includes(storeId) ? prev.filter(id => id !== storeId) : [...prev, storeId]);
   const handleWish = id => setWishlist(currentWishlist => currentWishlist.map(item => item.id === id && !item.wishedBy.includes(currentUser.id) ? { ...item, wishes: item.wishes + 1, wishedBy: [...item.wishedBy, currentUser.id] } : item).sort((a, b) => b.wishes - a.wishes));
   const handleAddWish = wishText => setWishlist(prev => [{ id: Date.now(), name: wishText, category: '其他', wishes: 1, wishedBy: [currentUser.id] }, ...prev].sort((a, b) => b.wishes - a.wishes));
@@ -874,15 +1051,41 @@ export default function App() {
     setActiveTab('home');
   };
 
-  const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full pt-20">
-          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-          <p className="mt-4 text-gray-500">正在載入商店資料...</p>
+  if (isLoading) {
+    return (
+      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
+        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
+          <div className="flex flex-col items-center justify-center h-full">
+            <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            <p className="mt-4 text-gray-500">正在載入...</p>
+          </div>
         </div>
-      );
-    }
+      </div>
+    );
+  }
+
+  if (!firebaseUser) {
+    return (
+      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
+        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
+          <AuthScreen />
+        </div>
+      </div>
+    );
+  }
+  
+  if (isProfileIncomplete) {
+     return (
+      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
+        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
+          <RegistrationScreen firebaseUser={firebaseUser} onRegistrationComplete={handleRegistrationComplete} />
+        </div>
+      </div>
+    );
+  }
+
+
+  const renderContent = () => {
     if (isViewingTransactions) {
         return <TransactionHistoryScreen transactions={transactions[currentUser.id] || []} />;
     }
@@ -899,7 +1102,7 @@ export default function App() {
         case 'groupbuy': content = <GroupBuyScreen groupBuys={groupBuys} onSelect={setSelectedGroupBuy} />; break;
         case 'tea': content = <AfternoonTeaScreen onSelectStore={setSelectedTeaStore} />; break;
         case 'wishlist': content = <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />; break;
-        case 'profile': content = <ProfileScreen currentUser={currentUser} onSwitchUser={handleSwitchUser} onCheckIn={handleCheckIn} canCheckIn={canCheckIn} groupBuys={groupBuys} onViewTransactions={() => setIsViewingTransactions(true)} onViewPoints={() => setIsViewingPoints(true)} onViewCompanyInfo={() => setIsCompanyInfoOpen(true)} />; break;
+        case 'profile': content = <ProfileScreen currentUser={currentUser} onCheckIn={handleCheckIn} canCheckIn={canCheckIn} groupBuys={groupBuys} onViewTransactions={() => setIsViewingTransactions(true)} onViewPoints={() => setIsViewingPoints(true)} onViewCompanyInfo={() => setIsCompanyInfoOpen(true)} onLogout={handleLogout} />; break;
         default: content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
     }
     return <div key={activeTab} className="animate-fade-in">{content}</div>;
