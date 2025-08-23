@@ -228,10 +228,17 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
 
 const ProfileScreen = ({ currentUser, onSwitchUser, onCheckIn, canCheckIn, groupBuys, onViewTransactions, onViewPoints, onViewCompanyInfo, onLogout }) => (
     <main className="p-4 space-y-4">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-start space-x-4">
             <img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" />
-            <div>
-                <h2 className="text-2xl font-bold">{currentUser.name}</h2>
+            <div className="pt-2">
+                <div className="flex items-center space-x-2">
+                    <h2 className="text-2xl font-bold">{currentUser.name}</h2>
+                    {currentUser.status === 'pending_verification' && (
+                        <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-1 rounded-full">
+                            未激活
+                        </span>
+                    )}
+                </div>
                 <button onClick={onViewCompanyInfo} className="text-gray-600 hover:text-blue-600 transition-colors text-left">
                     <p>{companies[currentUser.companyId]?.name || '未知公司'}</p>
                 </button>
@@ -784,7 +791,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
     );
 };
 
-// --- [新] 新用戶註冊資料頁面 ---
+// --- 新用戶註冊資料頁面 ---
 const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -833,6 +840,7 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
             points: 100, // 新用戶獎勵點數
             lastCheckIn: '',
             walletBalance: 0,
+            status: 'pending_verification', // 新增狀態欄位
         };
 
         try {
@@ -1112,7 +1120,7 @@ export default function App() {
       if (isViewingTransactions) return '交易紀錄';
       if (isViewingPoints) return '點數紀錄';
       if (selectedTeaStore) return selectedTeaStore.name;
-      return { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '個人資料' }[activeTab];
+      return { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '我的帳號' }[activeTab];
   };
   
   const showBackButton = isViewingTransactions || isViewingPoints || !!selectedTeaStore || activeTab === 'profile';
