@@ -1,57 +1,73 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, TrendingUp, TrendingDown, Phone, Loader2, LogOut, Camera } from 'lucide-react';
+import React from 'react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
-
-// --- Firebase 設定 ---
+// --- Firebase Configuration ---
+// These global variables will be provided by the environment.
 const firebaseConfig = {
   apiKey: "AIzaSyCH19CEf7ybXeJE-ZErIScVc8fXFrwh5Zw",
   authDomain: "corporate-perks-app.firebaseapp.com",
   projectId: "corporate-perks-app",
-  storageBucket: "corporate-perks-app.appspot.com",
+  storageBucket: "corporate-perks-app.firebasestorage.app",
   messagingSenderId: "104236011894",
   appId: "1:104236011894:web:f858f533ac72594458ea57"
 };
 
-// 初始化 Firebase
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-
-// --- 模擬資料 (平台模型) ---
-const companies = {
-  'company-a': { 
-    id: 'company-a', 
-    name: '卓越科技有限公司',
-    address: '台北市信義區信義路五段7號 89樓',
-    phone: '02-8101-8888',
-    welfareId: 'WEL-TW-101'
-  },
-  'company-b': { 
-    id: 'company-b', 
-    name: '創新國際股份有限公司',
-    address: '新竹市東區科學園區工業東二路1號',
-    phone: '03-578-1234',
-    welfareId: 'WEL-HS-007'
-  },
+// --- Helper Functions ---
+const translateAuthError = (code) => {
+  const map = {
+    'auth/invalid-credential': '帳號或密碼錯誤，或帳號不存在。',
+    'auth/invalid-email': '電子郵件格式不正確',
+    'auth/user-disabled': '此帳號已被停用',
+    'auth/user-not-found': '找不到此帳號',
+    'auth/wrong-password': '密碼錯誤',
+    'auth/email-already-in-use': '此電子郵件已被註冊',
+    'auth/weak-password': '密碼過於簡單（至少 6 碼）',
+    'auth/operation-not-allowed': '此登入方式未啟用',
+    'auth/unauthorized-domain': '網域未授權',
+    'auth/network-request-failed': '網路請求失敗，請檢查您的連線',
+    'auth/too-many-requests': '嘗試次數過多，請稍後再試',
+  };
+  return map[code] || code || '發生未知錯誤';
 };
 
-// 僅為顯示拼團其他成員資訊的模擬資料
-const mockUsers = {
-    'user-2': { name: '陳小明', avatarUrl: 'https://placehold.co/100x100/8E44AD/FFFFFF?text=陳' },
+
+// --- Mock Data for Initial Seeding ---
+// This data is used to populate Firestore for the first time.
+const MOCK_COMPANIES = {
+    'company-a': { id: 'company-a', name: '卓越科技有限公司', address: '台北市信義區信義路五段7號 89樓', phone: '02-8101-8888', welfareId: 'WEL-TW-101' },
+    'company-b': { id: 'company-b', name: '創新國際股份有限公司', address: '新竹市東區科學園區工業東二路1號', phone: '03-578-1234', welfareId: 'WEL-HS-007' },
 };
 
-const categories = ['美食餐飲', '休閒娛樂', '生活百貨', '美容美髮', '交通出行', '學習成長'];
+const MOCK_STORES = [
+    { id: 'store-1', name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
+    { id: 'store-2', name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
+    { id: 'store-3', name: '誠品生活 eslite', category: '生活百貨', offer: '圖書、文具、雜誌享 9 折優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/008855/FFFFFF?text=eslite', details: '特價品、餐飲、部分專櫃除外。' },
+];
 
-const teaStores = [
+const MOCK_GROUP_BUYS = [
+    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'gb-3', name: '精品濾掛咖啡組', description: '嚴選阿拉比卡咖啡豆，中度烘焙帶有果香風味，讓您在辦公室也能享受一杯好咖啡。', marketPrice: 800, groupPrice: 550, groupSize: 5, imageUrl: 'https://placehold.co/600x400/795548/FFFFFF?text=咖啡組', endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }, // Ended
+];
+
+const MOCK_WISHLIST = [
+    { id: 'wish-1', name: '海底撈火鍋', category: '美食餐飲', wishes: 128, wishedBy: [] }
+];
+
+const MOCK_TEA_STORES = [
     { id: 'ts-1', name: '50嵐', logo: 'https://placehold.co/100x100/F9A825/000000?text=50嵐', description: '台灣知名連鎖手搖飲品牌。' },
     { id: 'ts-2', name: '可不可熟成紅茶', logo: 'https://placehold.co/100x100/000000/FFFFFF?text=KEBUKE', description: '專注於熟成紅茶的特色飲品店。' },
 ];
 
-const sampleMenu = {
+const MOCK_TEA_MENU = {
     'ts-1': [
         { id: '50-1', name: '珍珠奶茶', price: 50, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰', '溫', '熱'] }, imageUrl: 'https://placehold.co/400x400/FFC107/000000?text=珍珠奶茶' },
         { id: '50-2', name: '四季春青茶', price: 35, options: { sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'], ice: ['正常冰', '少冰', '微冰', '去冰'] }, imageUrl: 'https://placehold.co/400x400/8BC34A/FFFFFF?text=四季春' },
@@ -62,43 +78,15 @@ const sampleMenu = {
     ],
 };
 
-const initialWishlist = [ { id: 1, name: '海底撈火鍋', category: '美食餐飲', wishes: 128, wishedBy: [] }];
-const initialNotifications = [ { id: 1, type: 'new_store', title: '新店家加入！', content: 'Cama Café 已加入特約行列！', timestamp: '2 小時前', read: false }];
-const initialGroupBuys = [
-    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', joinedBy: [], endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', joinedBy: ['user-1'], endDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000).toISOString() },
-    { id: 'gb-3', name: '精品濾掛咖啡組', description: '嚴選阿拉比卡咖啡豆，中度烘焙帶有果香風味，讓您在辦公室也能享受一杯好咖啡。', marketPrice: 800, groupPrice: 550, groupSize: 5, imageUrl: 'https://placehold.co/600x400/795548/FFFFFF?text=咖啡組', joinedBy: [], endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }, // 模擬已結束
+const SUGGESTION_DATABASE = [
+    '路易莎咖啡 (LOUISA COFFEE)', '大苑子', '康是美', 'NET 主富服飾', '鼎泰豐', '鼎王麻辣鍋', 'IKEA 宜家家居', '家樂福 Carrefour', '全聯福利中心'
 ];
 
-const suggestionDatabase = [
-  '路易莎咖啡 (LOUISA COFFEE)', '大苑子', '康是美', 'NET 主富服飾', '鼎泰豐', '鼎王麻辣鍋', 'IKEA 宜家家居', '家樂福 Carrefour', '全聯福利中心'
-];
-
-// --- 模擬交易紀錄資料 ---
-const transactionHistoryData = {
-  'user-1': [
-    { id: 't1', type: 'purchase', description: '50嵐 - 珍珠奶茶', amount: -50, timestamp: '2025-08-22T10:30:00Z' },
-    { id: 't2', type: 'groupbuy_refund', description: '手作蛋捲禮盒 (拼團失敗退款)', amount: 380, timestamp: '2025-08-21T15:00:00Z' },
-    { id: 't3', type: 'topup', description: '福利金儲值', amount: 500, timestamp: '2025-08-21T09:00:00Z' },
-    { id: 't4', type: 'purchase', description: '威秀影城 - 電影票', amount: -240, timestamp: '2025-08-20T18:45:00Z' },
-  ],
-};
-
-// --- 模擬點數紀錄資料 ---
-const pointHistoryData = {
-  'user-1': [
-    { id: 'p1', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-22T08:00:00Z' },
-    { id: 'p2', type: 'checkin', description: '每日簽到', points: 10, timestamp: '2025-08-21T08:05:00Z' },
-    { id: 'p3', type: 'special_event', description: '新用戶註冊獎勵', points: 100, timestamp: '2025-08-20T10:00:00Z' },
-  ],
-};
-
-
-// --- 用於倒數計時的 Custom Hook ---
+// --- Custom Hooks ---
 const useCountdown = (endDate) => {
-    const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-    const [isEnded, setIsEnded] = useState(false);
-    useEffect(() => {
+    const [timeLeft, setTimeLeft] = React.useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+    const [isEnded, setIsEnded] = React.useState(false);
+    React.useEffect(() => {
         if (!endDate) return;
         const calculateTimeLeft = () => {
             const difference = +new Date(endDate) - +new Date();
@@ -106,23 +94,33 @@ const useCountdown = (endDate) => {
             return null;
         };
         const timer = setInterval(() => { const newTimeLeft = calculateTimeLeft(); if (newTimeLeft) { setTimeLeft(newTimeLeft); setIsEnded(false); } else { setIsEnded(true); clearInterval(timer); } }, 1000);
-        
         const newTimeLeft = calculateTimeLeft();
-        if (newTimeLeft) {
-            setTimeLeft(newTimeLeft);
-            setIsEnded(false);
-        } else {
-            setIsEnded(true);
-        }
-
+        if (newTimeLeft) { setTimeLeft(newTimeLeft); setIsEnded(false); } else { setIsEnded(true); }
         return () => clearInterval(timer);
     }, [endDate]);
     return { timeLeft, isEnded };
 };
 
-// --- 仿原生風格的元件 ---
-const AppHeader = ({ title, onBack, showBackButton = false, notifications, onMarkAllRead, onProfileClick }) => {
-    const [panelOpen, setPanelOpen] = useState(false);
+// --- UI Components ---
+const Toast = ({ message, type, onDismiss }) => {
+    React.useEffect(() => {
+        const timer = setTimeout(onDismiss, 3000);
+        return () => clearTimeout(timer);
+    }, [onDismiss]);
+
+    const bgColor = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' }[type] || 'bg-gray-800';
+    const icon = { success: <CheckCircle />, error: <X />, info: <Info /> }[type];
+
+    return (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-white font-semibold flex items-center space-x-2 shadow-lg animate-fade-in-down ${bgColor}`}>
+            {icon}
+            <span>{message}</span>
+        </div>
+    );
+};
+
+const AppHeader = ({ title, onBack, showBackButton, notifications, onMarkAllRead, onProfileClick }) => {
+    const [panelOpen, setPanelOpen] = React.useState(false);
     const unreadCount = notifications.filter(n => !n.read).length;
     return (
         <header className="bg-white sticky top-0 z-20 border-b border-gray-200">
@@ -150,7 +148,7 @@ const AppHeader = ({ title, onBack, showBackButton = false, notifications, onMar
 
 const NotificationPanel = ({ notifications, onMarkAllRead }) => {
     const getIconForType = type => ({ new_store: <Building className="w-5 h-5 text-green-500" />, offer: <Tag className="w-5 h-5 text-red-500" />, wishlist: <Gift className="w-5 h-5 text-yellow-500" /> }[type] || <Bell className="w-5 h-5 text-gray-500" />);
-    return (<div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-30 animate-fade-in-down"><div className="p-3 flex justify-between items-center border-b"><h3 className="font-bold">通知中心</h3><button onClick={onMarkAllRead} className="text-xs text-blue-600 font-semibold">全部已讀</button></div><div className="max-h-96 overflow-y-auto">{notifications.length > 0 ? notifications.map(notif => (<div key={notif.id} className={`p-3 flex items-start space-x-3 border-b ${!notif.read ? 'bg-blue-50' : 'bg-white'}`}><div className="flex-shrink-0 mt-1">{getIconForType(notif.type)}</div><div><p className="font-semibold text-sm">{notif.title}</p><p className="text-xs text-gray-600">{notif.content}</p><p className="text-xs text-gray-400 mt-1">{notif.timestamp}</p></div></div>)) : <p className="p-4 text-sm text-gray-500 text-center">沒有新的通知</p>}</div></div>);
+    return (<div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-30 animate-fade-in-down"><div className="p-3 flex justify-between items-center border-b"><h3 className="font-bold">通知中心</h3><button onClick={onMarkAllRead} className="text-xs text-blue-600 font-semibold">全部已讀</button></div><div className="max-h-96 overflow-y-auto">{notifications.length > 0 ? notifications.map(notif => (<div key={notif.id} className={`p-3 flex items-start space-x-3 border-b ${!notif.read ? 'bg-blue-50' : 'bg-white'}`}><div className="flex-shrink-0 mt-1">{getIconForType(notif.type)}</div><div><p className="font-semibold text-sm">{notif.title}</p><p className="text-xs text-gray-600">{notif.content}</p><p className="text-xs text-gray-400 mt-1">{new Date(notif.timestamp?.toDate()).toLocaleString('zh-TW')}</p></div></div>)) : <p className="p-4 text-sm text-gray-500 text-center">沒有新的通知</p>}</div></div>);
 };
 
 const BottomNavBar = ({ activeTab, setActiveTab }) => {
@@ -171,26 +169,42 @@ const StoreCard = ({ store, onSelect, isFavorite, onToggleFavorite, small = fals
   </div>
 );
 
-// --- 頁面元件 ---
+// --- Page Components ---
 
-const HomeScreen = ({ stores, favorites, onToggleFavorite, onSelectStore }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('所有類別');
-    const recommendedStores = useMemo(() => { const favoriteCategories = new Set(stores.filter(s => favorites.includes(s.id)).map(s => s.category)); return stores.filter(s => favoriteCategories.has(s.category) && !favorites.includes(s.id)).slice(0, 5); }, [stores, favorites]);
-    const filteredStores = useMemo(() => { let filtered = stores; if (selectedCategory === '我的最愛') filtered = stores.filter(store => favorites.includes(store.id)); else if (selectedCategory !== '所有類別') filtered = stores.filter(store => store.category === selectedCategory); return filtered.filter(store => store.name.toLowerCase().includes(searchTerm.toLowerCase())); }, [searchTerm, selectedCategory, favorites, stores]);
-    const CategoryFilter = ({ selected, onSelect }) => { const allCategories = ['我的最愛', '所有類別', ...categories]; return (<div className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-4 px-4">{allCategories.map(cat => (<button key={cat} onClick={() => onSelect(cat)} className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${selected === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{cat === '我的最愛' && <Heart className="w-4 h-4 inline-block mr-1" />}{cat}</button>))}</div>); };
+const HomeScreen = ({ stores, currentUser, onToggleFavorite, onSelectStore }) => {
+    const [searchTerm, setSearchTerm] = React.useState('');
+    const [selectedCategory, setSelectedCategory] = React.useState('所有類別');
+    const favorites = currentUser?.favorites || [];
+
+    const recommendedStores = React.useMemo(() => {
+        const favoriteCategories = new Set(stores.filter(s => favorites.includes(s.id)).map(s => s.category));
+        return stores.filter(s => favoriteCategories.has(s.category) && !favorites.includes(s.id)).slice(0, 5);
+    }, [stores, favorites]);
+
+    const filteredStores = React.useMemo(() => {
+        let filtered = stores;
+        if (selectedCategory === '我的最愛') filtered = stores.filter(store => favorites.includes(store.id));
+        else if (selectedCategory !== '所有類別') filtered = stores.filter(store => store.category === selectedCategory);
+        return filtered.filter(store => store.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [searchTerm, selectedCategory, favorites, stores]);
+
+    const CategoryFilter = ({ selected, onSelect }) => {
+        const allCategories = ['我的最愛', '所有類別', ...[...new Set(stores.map(s => s.category))]];
+        return (<div className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-4 px-4">{allCategories.map(cat => (<button key={cat} onClick={() => onSelect(cat)} className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${selected === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{cat === '我的最愛' && <Heart className="w-4 h-4 inline-block mr-1" />}{cat}</button>))}</div>);
+    };
+
     return (<main className="p-4 space-y-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" placeholder="搜尋商店名稱..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full h-11 pl-10 pr-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" /></div>{recommendedStores.length > 0 && (<div><h2 className="font-bold text-gray-800 mb-2">為您推薦</h2><div className="flex space-x-4 overflow-x-auto pb-2 -mx-4 px-4">{recommendedStores.map(store => <StoreCard key={store.id} store={store} onSelect={onSelectStore} isFavorite={favorites.includes(store.id)} onToggleFavorite={onToggleFavorite} small />)}</div></div>)}<CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} /><div className="space-y-3">{filteredStores.length > 0 ? filteredStores.map(store => <StoreCard key={store.id} store={store} onSelect={onSelectStore} isFavorite={favorites.includes(store.id)} onToggleFavorite={onToggleFavorite} />) : <div className="text-center py-16"><p className="text-gray-500">找不到符合條件的商店。</p></div>}</div></main>);
 };
 
 const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
-    const [wishText, setWishText] = useState('');
-    const [suggestions, setSuggestions] = useState([]);
+    const [wishText, setWishText] = React.useState('');
+    const [suggestions, setSuggestions] = React.useState([]);
     
     const handleInputChange = (e) => {
         const value = e.target.value;
         setWishText(value);
         if (value.length > 0) {
-            setSuggestions(suggestionDatabase.filter(item => item.toLowerCase().includes(value.toLowerCase())));
+            setSuggestions(SUGGESTION_DATABASE.filter(item => item.toLowerCase().includes(value.toLowerCase())));
         } else {
             setSuggestions([]);
         }
@@ -204,7 +218,7 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     const handleSubmit = e => { 
         e.preventDefault(); 
         if (wishText.trim().length < 2 || !isNaN(wishText.trim())) {
-            // In a real app, use a modal instead of alert.
+            // In a real app, use a modal or toast instead of alert.
             alert("請輸入有效的店家名稱 (至少兩個字元，且不能純為數字)");
             return;
         }
@@ -230,9 +244,9 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     );
 };
 
-const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, onViewTransactions, onViewPoints, onViewCompanyInfo, onLogout, onEditProfile }) => (
+const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, setView }) => (
     <main className="p-4 space-y-4">
-        <button onClick={onEditProfile} className="w-full flex items-start space-x-4 text-left active:bg-gray-100 rounded-lg p-2 -m-2 transition-colors">
+        <button onClick={() => setView({ name: 'editProfile' })} className="w-full flex items-start space-x-4 text-left active:bg-gray-100 rounded-lg p-2 -m-2 transition-colors">
             <img src={currentUser.avatarUrl} alt="Employee Avatar" className="w-20 h-20 rounded-full" />
             <div className="pt-2">
                 <div className="flex items-center space-x-2">
@@ -243,7 +257,7 @@ const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, onViewTransactions,
                         </span>
                     )}
                 </div>
-                <p className="text-gray-600">{companies[currentUser.companyId]?.name || '未知公司'}</p>
+                <p className="text-gray-600">{MOCK_COMPANIES[currentUser.companyId]?.name || '未知公司'}</p>
             </div>
         </button>
          {currentUser.status === 'pending_verification' && (
@@ -258,12 +272,12 @@ const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, onViewTransactions,
             </div>
             <div className="mt-2 text-4xl font-bold tracking-wider">NT$ {currentUser.walletBalance.toLocaleString()}</div>
             <div className="mt-4 flex space-x-4 text-sm">
-                <button onClick={onViewTransactions} className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">交易紀錄</button>
+                <button onClick={() => setView({ name: 'transactions' })} className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">交易紀錄</button>
                 <button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">儲值</button>
             </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button onClick={onViewPoints} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors">
+            <button onClick={() => setView({ name: 'points' })} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors">
                 <div className="flex items-center space-x-3">
                     <Award className="w-6 h-6 text-blue-500" />
                     <span className="font-semibold">我的點數</span>
@@ -280,14 +294,13 @@ const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, onViewTransactions,
                 </button>
             </div>
         </div>
-        <button onClick={onLogout} className="bg-red-500 text-white font-bold py-3 px-6 rounded-lg w-full active:bg-red-600 flex items-center justify-center space-x-2">
+        <button onClick={() => signOut(auth)} className="bg-red-500 text-white font-bold py-3 px-6 rounded-lg w-full active:bg-red-600 flex items-center justify-center space-x-2">
             <LogOut size={20} />
             <span>登出</span>
         </button>
     </main>
 );
 
-// --- 交易紀錄頁面 ---
 const TransactionHistoryScreen = ({ transactions }) => {
     const getTransactionIcon = (type) => {
         switch (type) {
@@ -298,9 +311,9 @@ const TransactionHistoryScreen = ({ transactions }) => {
         }
     };
 
-    const formatTimestamp = (isoString) => {
-        const date = new Date(isoString);
-        return date.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp?.toDate) return '...';
+        return timestamp.toDate().toLocaleString('zh-TW');
     };
 
     return (
@@ -331,7 +344,6 @@ const TransactionHistoryScreen = ({ transactions }) => {
     );
 };
 
-// --- 點數紀錄頁面 ---
 const PointHistoryScreen = ({ pointsHistory }) => {
     const getPointIcon = (type) => {
         switch (type) {
@@ -341,9 +353,9 @@ const PointHistoryScreen = ({ pointsHistory }) => {
         }
     };
 
-    const formatTimestamp = (isoString) => {
-        const date = new Date(isoString);
-        return date.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+    const formatTimestamp = (timestamp) => {
+        if (!timestamp?.toDate) return '...';
+        return timestamp.toDate().toLocaleString('zh-TW');
     };
 
     return (
@@ -374,18 +386,15 @@ const PointHistoryScreen = ({ pointsHistory }) => {
     );
 };
 
-
 const GroupBuyCard = ({ item, onSelect }) => {
     const { timeLeft, isEnded } = useCountdown(item.endDate);
 
     const timerString = () => {
         if (isEnded) return "已結束";
-        
         const days = timeLeft.days > 0 ? `${timeLeft.days} 天 ` : '';
         const hours = `${String(timeLeft.hours).padStart(2, '0')}`;
         const minutes = `${String(timeLeft.minutes).padStart(2, '0')}`;
         const seconds = `${String(timeLeft.seconds).padStart(2, '0')}`;
-
         return `剩餘 ${days}${hours}:${minutes}:${seconds}`;
     };
 
@@ -407,6 +416,7 @@ const GroupBuyCard = ({ item, onSelect }) => {
         </div>
     );
 };
+
 const GroupBuyScreen = ({ groupBuys, onSelect }) => {
     const now = new Date();
     const activeGroupBuys = groupBuys.filter(item => new Date(item.endDate) > now);
@@ -433,11 +443,11 @@ const GroupBuyScreen = ({ groupBuys, onSelect }) => {
     );
 };
 
-const AfternoonTeaScreen = ({ onSelectStore }) => (<main className="p-4 space-y-3">{teaStores.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
+const AfternoonTeaScreen = ({ onSelectStore }) => (<main className="p-4 space-y-3">{MOCK_TEA_STORES.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
 
-// --- 下午茶點餐頁面 ---
-const TeaOrderScreen = ({ store, menu, onAddToCart }) => {
-    const [selectedItem, setSelectedItem] = useState(null);
+const TeaOrderScreen = ({ store, onAddToCart }) => {
+    const [selectedItem, setSelectedItem] = React.useState(null);
+    const menu = MOCK_TEA_MENU[store.id] || [];
 
     const handleAddToCart = (item, options, quantity) => {
         onAddToCart({ ...item, options, quantity });
@@ -478,12 +488,11 @@ const TeaOrderScreen = ({ store, menu, onAddToCart }) => {
     );
 };
 
-// --- 品項選項選擇器 ---
 const OptionSelector = ({ item, onClose, onAddToCart }) => {
-    const [options, setOptions] = useState({});
-    const [quantity, setQuantity] = useState(1);
+    const [options, setOptions] = React.useState({});
+    const [quantity, setQuantity] = React.useState(1);
 
-    useEffect(() => {
+    React.useEffect(() => {
         const defaultOptions = {};
         if (item.options) {
             Object.keys(item.options).forEach(key => {
@@ -493,7 +502,7 @@ const OptionSelector = ({ item, onClose, onAddToCart }) => {
         setOptions(defaultOptions);
     }, [item]);
 
-    const totalPrice = useMemo(() => item.price * quantity, [item.price, quantity]);
+    const totalPrice = React.useMemo(() => item.price * quantity, [item.price, quantity]);
 
     const handleSubmit = () => {
         onAddToCart(item, options, quantity);
@@ -542,11 +551,9 @@ const OptionSelector = ({ item, onClose, onAddToCart }) => {
     );
 };
 
-
 const CartModal = ({ cart, setCart, user, onCheckout, onClose }) => {
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    // 移除購物車項目
     const handleRemoveItem = (cartId) => {
         setCart(currentCart => currentCart.filter(item => item.cartId !== cartId));
     };
@@ -584,170 +591,12 @@ const CartModal = ({ cart, setCart, user, onCheckout, onClose }) => {
     );
 };
 
-const GroupBuyDetailModal = ({ item, user, onClose, onStartPing, onJoinPing, activePings }) => {
-      if (!item) return null;
-      const userPing = activePings.find(p => p.itemId === item.id && p.members.includes(user.id));
-
-      if (userPing) {
-          return <PingStatusModal ping={userPing} item={item} user={user} onClose={onClose} />;
-      }
-      
-      const availablePings = activePings.filter(p => p.itemId === item.id && p.members.length < item.groupSize);
-
-      return (
-          <div className="absolute inset-0 bg-white z-50 animate-fade-in">
-              <div className="h-full w-full flex flex-col">
-                  <div className="bg-white sticky top-0 z-10 border-b border-gray-200"><div className="px-4 h-14 flex items-center justify-between"><button onClick={onClose} className="text-blue-600 font-semibold">取消</button><h2 className="font-bold text-gray-800">商品詳情</h2><div className="w-12"></div></div></div>
-                  <div className="flex-grow overflow-y-auto">
-                      <img src={item.imageUrl} alt={item.name} className="w-full h-64 object-cover" />
-                      <div className="p-4">
-                          <h2 className="text-3xl font-bold">{item.name}</h2>
-                          <p className="text-gray-700 mt-4">{item.description}</p>
-                      </div>
-                      {availablePings.length > 0 && (
-                          <div className="p-4">
-                              <h3 className="font-bold mb-2">進行中的團 (可直接加入)</h3>
-                              <div className="space-y-2">{availablePings.map(ping => <PingJoinCard key={ping.id} ping={ping} item={item} onJoinPing={onJoinPing} />)}</div>
-                          </div>
-                      )}
-                  </div>
-                  <div className="p-4 bg-white border-t grid grid-cols-2 gap-2">
-                      <button className="bg-gray-200 text-gray-800 font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.marketPrice}</span><span className="text-xs">單獨購買</span></button>
-                      <button onClick={() => onStartPing(item.id)} className="bg-red-500 text-white font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.groupPrice}</span><span className="text-xs">{item.groupSize}人拼團</span></button>
-                  </div>
-              </div>
-          </div>
-      );
-};
-
-const PingJoinCard = ({ ping, item, onJoinPing }) => {
-    const leader = mockUsers[ping.leader];
-    const { timeLeft, isEnded } = useCountdown(ping.endDate);
-    if (isEnded) return null;
-
-    const daysText = timeLeft.days > 0 ? `${timeLeft.days}天 ` : '';
-    const hoursText = `${String(timeLeft.hours).padStart(2, '0')}`;
-    const minutesText = `${String(timeLeft.minutes).padStart(2, '0')}`;
-    const secondsText = `${String(timeLeft.seconds).padStart(2, '0')}`;
-    const countdownText = `剩餘 ${daysText}${hoursText}:${minutesText}:${secondsText}`;
-
-    return (
-        <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center">
-                <img src={leader.avatarUrl} className="w-10 h-10 rounded-full" />
-                <div className="ml-3">
-                    <p className="font-semibold">{leader.name} 的團</p>
-                    <p className="text-xs text-gray-500">還差 {item.groupSize - ping.members.length} 人，{countdownText}</p>
-                </div>
-            </div>
-            <button onClick={() => onJoinPing(ping.id)} className="bg-red-500 text-white font-bold px-4 py-2 rounded-lg text-sm">加入</button>
-        </div>
-    );
-};
-
-const PingStatusModal = ({ ping, item, user, onClose }) => {
-    const { timeLeft, isEnded } = useCountdown(ping.endDate);
-    const isSuccess = ping.members.length >= item.groupSize;
-    const handleShare = () => {
-        const leaderName = ping.leader === user.id ? (user.nickname || user.name) : (mockUsers[ping.leader]?.name || '一位同事');
-        alert(`已複製拼團連結！\n快來加入 ${leaderName} 開的「${item.name}」團！還差 ${item.groupSize - ping.members.length} 人！`);
-    }
-
-    const getMemberAvatar = (memberId) => {
-        if (memberId === user.id) {
-            return user.avatarUrl;
-        }
-        return mockUsers[memberId]?.avatarUrl || `https://placehold.co/100x100/CCCCCC/FFFFFF?text=?`;
-    };
-
-    const daysText = timeLeft.days > 0 ? `${timeLeft.days}天 ` : '';
-    const hoursText = `${String(timeLeft.hours).padStart(2, '0')}`;
-    const minutesText = `${String(timeLeft.minutes).padStart(2, '0')}`;
-    const secondsText = `${String(timeLeft.seconds).padStart(2, '0')}`;
-    const countdownText = `${daysText}${hoursText}:${minutesText}:${secondsText}`;
-
-    return (
-        <div className="absolute inset-0 bg-white z-50 animate-fade-in">
-            <div className="h-full w-full flex flex-col items-center p-4">
-                <div className="w-full flex justify-end"><button onClick={onClose} className="text-blue-600 font-semibold">完成</button></div>
-                <div className="text-center mt-8">
-                    <h2 className="text-2xl font-bold">{isSuccess ? "拼團成功！" : isEnded ? "拼團失敗" : "拼團中..."}</h2>
-                    <p className="text-gray-600 mt-2">{isSuccess ? "已為您成立訂單" : isEnded ? "已將款項退回您的錢包" : `還差 ${item.groupSize - ping.members.length} 人，快邀請同事加入！`}</p>
-                    <div className="mt-4 font-semibold text-2xl text-red-500">{isEnded || isSuccess ? "" : countdownText}</div>
-                </div>
-                <div className="my-8 flex items-center space-x-2">
-                    {ping.members.map(memberId => <img key={memberId} src={getMemberAvatar(memberId)} className="w-12 h-12 rounded-full border-2 border-white" />)}
-                    {[...Array(item.groupSize - ping.members.length)].map((_, i) => <div key={i} className="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center"><User className="text-gray-400" /></div>)}
-                </div>
-                <div className="w-full max-w-sm">
-                    <button onClick={handleShare} disabled={isSuccess || isEnded} className="w-full bg-red-500 text-white font-bold py-4 rounded-lg text-lg disabled:bg-gray-400">邀請同事加入</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- 公司資訊彈窗 ---
-const CompanyInfoModal = ({ company, onClose }) => {
-    if (!company) return null;
-
-    return (
-        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-center p-4" onClick={onClose}>
-            <div
-                className="bg-white rounded-2xl w-full max-w-sm animate-fade-in-up"
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="p-4 border-b text-center relative">
-                    <h3 className="font-bold text-lg">公司資訊</h3>
-                    <button onClick={onClose} className="absolute top-1/2 -translate-y-1/2 right-4 p-1 rounded-full active:bg-gray-200"><X size={20}/></button>
-                </div>
-                <div className="p-6 space-y-4">
-                    <div className="flex items-start space-x-3">
-                        <Building className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm text-gray-500">公司名稱</p>
-                            <p className="font-semibold">{company.name}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                        <MapPin className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm text-gray-500">公司地址</p>
-                            <p className="font-semibold">{company.address}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                        <Phone className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm text-gray-500">連絡電話</p>
-                            <p className="font-semibold">{company.phone}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                        <Tag className="w-5 h-5 text-gray-500 mt-1 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm text-gray-500">福委會編號</p>
-                            <p className="font-semibold">{company.welfareId}</p>
-                        </div>
-                    </div>
-                </div>
-                 <div className="p-4 bg-gray-50 rounded-b-2xl">
-                    <button onClick={onClose} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700">
-                        關閉
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- 登入/註冊頁面 ---
-const AuthScreen = ({ onAuthSuccess }) => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+const AuthScreen = () => {
+    const [isLogin, setIsLogin] = React.useState(true);
+    const [email, setEmail] = React.useState('');
+    const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
 
     const handleAuthAction = async (e) => {
         e.preventDefault();
@@ -759,9 +608,8 @@ const AuthScreen = ({ onAuthSuccess }) => {
             } else {
                 await createUserWithEmailAndPassword(auth, email, password);
             }
-            // onAuthStateChanged 會處理後續邏輯
         } catch (err) {
-            setError(err.message);
+            setError(translateAuthError(err.code));
         } finally {
             setIsLoading(false);
         }
@@ -772,28 +620,10 @@ const AuthScreen = ({ onAuthSuccess }) => {
             <h1 className="text-3xl font-bold text-blue-600 mb-2">企業福利平台</h1>
             <p className="text-gray-500 mb-8">{isLogin ? '登入您的帳戶' : '建立一個新帳戶'}</p>
             <form onSubmit={handleAuthAction} className="w-full space-y-4">
-                <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="電子郵件"
-                    className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                />
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="密碼"
-                    className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="電子郵件" className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="密碼" className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
                 {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
-                >
+                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center">
                     {isLoading && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
                     {isLogin ? '登入' : '註冊'}
                 </button>
@@ -805,24 +635,21 @@ const AuthScreen = ({ onAuthSuccess }) => {
     );
 };
 
-// --- 新用戶註冊資料頁面 ---
 const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [companyId, setCompanyId] = useState('');
-    const [companySearch, setCompanySearch] = useState('');
-    const [companySuggestions, setCompanySuggestions] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [name, setName] = React.useState('');
+    const [phone, setPhone] = React.useState('');
+    const [companyId, setCompanyId] = React.useState('');
+    const [companySearch, setCompanySearch] = React.useState('');
+    const [companySuggestions, setCompanySuggestions] = React.useState([]);
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [error, setError] = React.useState('');
 
     const handleCompanySearch = (e) => {
         const query = e.target.value;
         setCompanySearch(query);
-        setCompanyId(''); // 清除已選定的公司
+        setCompanyId('');
         if (query.length > 0) {
-            const suggestions = Object.values(companies).filter(c => 
-                c.name.toLowerCase().includes(query.toLowerCase())
-            );
+            const suggestions = Object.values(MOCK_COMPANIES).filter(c => c.name.toLowerCase().includes(query.toLowerCase()));
             setCompanySuggestions(suggestions);
         } else {
             setCompanySuggestions([]);
@@ -847,23 +674,23 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
         const avatarChar = name.trim()[0] || ' ';
         const newUserProfile = {
             name: name.trim(),
-            nickname: '', // 增加暱稱欄位
+            nickname: '',
             phone: phone.trim(),
             companyId,
             email: firebaseUser.email,
             avatarUrl: `https://placehold.co/100x100/CCCCCC/FFFFFF?text=${encodeURIComponent(avatarChar)}`,
             favorites: [],
-            points: 100, // 新用戶獎勵點數
+            points: 100,
             lastCheckIn: '',
             walletBalance: 0,
-            status: 'pending_verification', // 新增狀態欄位
+            status: 'pending_verification',
         };
 
         try {
             await setDoc(doc(db, "users", firebaseUser.uid), newUserProfile);
             onRegistrationComplete({ id: firebaseUser.uid, ...newUserProfile });
         } catch (err) {
-            console.error("寫入使用者資料失敗:", err);
+            console.error("Error writing user profile: ", err);
             setError("儲存資料失敗，請稍後再試。");
             setIsLoading(false);
         }
@@ -875,41 +702,14 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
             <p className="text-gray-500 mb-8">只差一步！請完成您的個人資料。</p>
             <form onSubmit={handleSubmit} className="w-full space-y-4 flex-grow flex flex-col">
                 <div className="space-y-4">
-                    <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="姓名"
-                        className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        required
-                    />
-                    <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="電話號碼"
-                        className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        required
-                    />
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="姓名" className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="電話號碼" className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
                     <div className="relative">
-                        <input
-                            type="text"
-                            value={companySearch}
-                            onChange={handleCompanySearch}
-                            placeholder="輸入公司名稱搜尋"
-                            className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        />
+                        <input type="text" value={companySearch} onChange={handleCompanySearch} placeholder="輸入公司名稱搜尋" className="w-full h-12 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
                         {companySuggestions.length > 0 && (
                             <ul className="absolute top-full mt-1 w-full bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
                                 {companySuggestions.map(c => (
-                                    <li 
-                                        key={c.id} 
-                                        onClick={() => selectCompany(c)} 
-                                        className="p-3 hover:bg-gray-100 cursor-pointer text-sm"
-                                    >
-                                        {c.name}
-                                    </li>
+                                    <li key={c.id} onClick={() => selectCompany(c)} className="p-3 hover:bg-gray-100 cursor-pointer text-sm">{c.name}</li>
                                 ))}
                             </ul>
                         )}
@@ -917,11 +717,7 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
                 </div>
                 {error && <p className="text-red-500 text-sm text-center">{error}</p>}
                 <div className="mt-auto">
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
-                    >
+                    <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center">
                         {isLoading && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
                         完成註冊
                     </button>
@@ -931,12 +727,11 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
     );
 };
 
-// --- 個人資料編輯頁面 ---
 const EditProfileScreen = ({ currentUser, onSave }) => {
-    const [name, setName] = useState(currentUser.name);
-    const [nickname, setNickname] = useState(currentUser.nickname || '');
-    const [phone, setPhone] = useState(currentUser.phone);
-    const [isLoading, setIsLoading] = useState(false);
+    const [name, setName] = React.useState(currentUser.name);
+    const [nickname, setNickname] = React.useState(currentUser.nickname || '');
+    const [phone, setPhone] = React.useState(currentUser.phone);
+    const [isLoading, setIsLoading] = React.useState(false);
 
     const handleSave = async () => {
         setIsLoading(true);
@@ -957,56 +752,26 @@ const EditProfileScreen = ({ currentUser, onSave }) => {
             <div className="space-y-4">
                 <div>
                     <label className="text-sm font-medium text-gray-700">姓名</label>
-                    <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                     <label className="text-sm font-medium text-gray-700">暱稱</label>
-                    <input
-                        type="text"
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
-                        placeholder="新增您的暱稱"
-                        className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                    <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="新增您的暱稱" className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                     <label className="text-sm font-medium text-gray-700">電話</label>
-                    <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full h-12 px-4 mt-1 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" />
                 </div>
                  <div>
                     <label className="text-sm font-medium text-gray-700">電子郵箱</label>
-                    <input
-                        type="email"
-                        value={currentUser.email}
-                        disabled
-                        className="w-full h-12 px-4 mt-1 bg-gray-200 border-transparent rounded-lg text-gray-500"
-                    />
+                    <input type="email" value={currentUser.email} disabled className="w-full h-12 px-4 mt-1 bg-gray-200 border-transparent rounded-lg text-gray-500" />
                 </div>
                  <div>
                     <label className="text-sm font-medium text-gray-700">公司</label>
-                    <input
-                        type="text"
-                        value={companies[currentUser.companyId]?.name || '未知公司'}
-                        disabled
-                        className="w-full h-12 px-4 mt-1 bg-gray-200 border-transparent rounded-lg text-gray-500"
-                    />
+                    <input type="text" value={MOCK_COMPANIES[currentUser.companyId]?.name || '未知公司'} disabled className="w-full h-12 px-4 mt-1 bg-gray-200 border-transparent rounded-lg text-gray-500" />
                 </div>
             </div>
-            <button
-                onClick={handleSave}
-                disabled={isLoading}
-                className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
-            >
+            <button onClick={handleSave} disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center">
                 {isLoading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : '儲存變更'}
             </button>
         </main>
@@ -1014,286 +779,316 @@ const EditProfileScreen = ({ currentUser, onSave }) => {
 };
 
 
-// --- 主應用程式元件 ---
+// --- Main App Component ---
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [currentUser, setCurrentUser] = useState(null);
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
-  const [selectedTeaStore, setSelectedTeaStore] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [groupBuys, setGroupBuys] = useState(initialGroupBuys);
-  const [selectedGroupBuy, setSelectedGroupBuy] = useState(null);
-  const [favorites, setFavorites] = useState([]);
-  const [wishlist, setWishlist] = useState(initialWishlist);
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [transactions, setTransactions] = useState({});
-  const [pointsHistory, setPointsHistory] = useState({});
-  const [isViewingTransactions, setIsViewingTransactions] = useState(false);
-  const [isViewingPoints, setIsViewingPoints] = useState(false);
-  const [isCompanyInfoOpen, setIsCompanyInfoOpen] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [activePings, setActivePings] = useState([
-      { id: 'ping-1', itemId: 'gb-2', leader: 'user-2', members: ['user-2'], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }
-  ]);
-  const [stores, setStores] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setIsLoading(true);
-      if (user) {
-        setFirebaseUser(user);
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists() && userDocSnap.data().name) {
-          setCurrentUser({ id: user.uid, ...userDocSnap.data() });
-          setIsProfileIncomplete(false);
-        } else {
-          setIsProfileIncomplete(true);
-          setCurrentUser(null);
-        }
-      } else {
-        setFirebaseUser(null);
-        setCurrentUser(null);
-        setIsProfileIncomplete(false);
-      }
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    // App State
+    const [view, setView] = React.useState({ name: 'home', params: {} });
+    const [activeTab, setActiveTab] = React.useState('home');
+    const [cart, setCart] = React.useState([]);
+    const [isCartOpen, setIsCartOpen] = React.useState(false);
+    const [toast, setToast] = React.useState(null);
 
-  useEffect(() => {
-    const fetchStores = async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const mockStores = [
-          { id: 1, name: '星巴克 Starbucks', category: '美食餐飲', offer: '憑 App QR Code，所有飲品享第二杯半價優惠。', location: '全台門市', logo: 'https://placehold.co/100x100/036635/FFFFFF?text=Starbucks', details: '此優惠不適用於外送平台、預訂服務。不可與其他優惠合併使用。' },
-          { id: 2, name: '威秀影城 Vieshow Cinemas', category: '休閒娛樂', offer: '出示 App QR Code，享 2D 電影票 NT$240 優惠價。', location: '全台據點', logo: 'https://placehold.co/100x100/ED1C24/FFFFFF?text=Vieshow', details: '每證每日限購 4 張。不適用於 3D、IMAX、特殊影廳。詳細辦法依影城公告為準。' },
-        ];
-        setStores(mockStores);
-      } catch (error) {
-        console.error("讀取商店資料失敗:", error);
-      }
-    };
+    // Auth State
+    const [firebaseUser, setFirebaseUser] = React.useState(null);
+    const [currentUser, setCurrentUser] = React.useState(null);
+    const [isProfileIncomplete, setIsProfileIncomplete] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
 
-    if (firebaseUser && !isProfileIncomplete) {
-        fetchStores();
-    }
-  }, [firebaseUser, isProfileIncomplete]);
+    // Firestore Data State
+    const [stores, setStores] = React.useState([]);
+    const [wishlist, setWishlist] = React.useState([]);
+    const [groupBuys, setGroupBuys] = React.useState([]);
+    const [notifications, setNotifications] = React.useState([]);
+    const [transactions, setTransactions] = React.useState([]);
+    const [pointsHistory, setPointsHistory] = React.useState([]);
+    
+    // --- Data Seeding ---
+    React.useEffect(() => {
+        const seedData = async () => {
+            const seedFlagRef = doc(db, "system", "seeded");
+            const seedFlagSnap = await getDoc(seedFlagRef);
+            if (!seedFlagSnap.exists()) {
+                console.log("First time setup: Seeding database...");
+                const batch = writeBatch(db);
 
-  const handleRegistrationComplete = (newProfile) => {
-      setCurrentUser(newProfile);
-      setIsProfileIncomplete(false);
-  };
+                MOCK_STORES.forEach(store => {
+                    const storeRef = doc(db, "stores", store.id);
+                    batch.set(storeRef, store);
+                });
+                MOCK_GROUP_BUYS.forEach(gb => {
+                    const gbRef = doc(db, "groupBuys", gb.id);
+                    batch.set(gbRef, gb);
+                });
+                MOCK_WISHLIST.forEach(wish => {
+                    const wishRef = doc(db, "wishlist", wish.id);
+                    batch.set(wishRef, wish);
+                });
 
-  const handleLogout = async () => {
-    await signOut(auth);
-  };
-  
-  const handleProfileUpdate = async (updatedData) => {
-    if (!currentUser) return;
-    const userDocRef = doc(db, "users", currentUser.id);
-    try {
-        const avatarChar = (updatedData.nickname || '').trim()[0] || (updatedData.name || '').trim()[0] || ' ';
-        const newAvatarUrl = `https://placehold.co/100x100/CCCCCC/FFFFFF?text=${encodeURIComponent(avatarChar)}`;
-        
-        const dataToUpdate = {
-            ...updatedData,
-            avatarUrl: newAvatarUrl
+                batch.set(seedFlagRef, { done: true });
+                await batch.commit();
+                console.log("Database seeded successfully.");
+            }
         };
+        seedData();
+    }, []);
 
-        await updateDoc(userDocRef, dataToUpdate);
-        setCurrentUser(prev => ({...prev, ...dataToUpdate}));
-        setIsEditingProfile(false);
-    } catch (error) {
-        console.error("更新個人資料失敗: ", error);
-        alert("更新失敗，請稍後再試。");
-    }
-  };
+    // --- Auth Effect ---
+    React.useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            setIsLoading(true);
+            if (user) {
+                setFirebaseUser(user);
+                const userDocRef = doc(db, "users", user.uid);
+                const userDocSnap = await getDoc(userDocRef);
+                if (userDocSnap.exists() && userDocSnap.data().name) {
+                    setCurrentUser({ id: user.uid, ...userDocSnap.data() });
+                    setIsProfileIncomplete(false);
+                } else {
+                    // User is authenticated but hasn't completed registration
+                    setIsProfileIncomplete(true);
+                    setCurrentUser(null);
+                }
+            } else {
+                // No user is signed in
+                setFirebaseUser(null);
+                setCurrentUser(null);
+                setIsProfileIncomplete(false);
+            }
+            setIsLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
 
+    // --- Firestore Listeners ---
+    React.useEffect(() => {
+        if (!currentUser?.id) return;
 
-  const handleStartPing = (itemId) => {
-      const newPing = { id: `ping-${Date.now()}`, itemId: itemId, leader: currentUser.id, members: [currentUser.id], endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() };
-      setActivePings([...activePings, newPing]);
-  };
+        const unsubscribers = [
+            onSnapshot(collection(db, "stores"), (snapshot) => {
+                setStores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }),
+            onSnapshot(collection(db, "wishlist"), (snapshot) => {
+                const sortedWishlist = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.wishes - a.wishes);
+                setWishlist(sortedWishlist);
+            }),
+            onSnapshot(collection(db, "groupBuys"), (snapshot) => {
+                setGroupBuys(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }),
+            onSnapshot(collection(db, "users", currentUser.id, "notifications"), (snapshot) => {
+                setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }),
+            onSnapshot(collection(db, "users", currentUser.id, "transactions"), (snapshot) => {
+                const sortedTxs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate());
+                setTransactions(sortedTxs);
+            }),
+            onSnapshot(collection(db, "users", currentUser.id, "points"), (snapshot) => {
+                const sortedPoints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate());
+                setPointsHistory(sortedPoints);
+            }),
+            onSnapshot(doc(db, "users", currentUser.id), (doc) => {
+                 if (doc.exists()) {
+                    setCurrentUser({ id: doc.id, ...doc.data() });
+                 }
+            })
+        ];
 
-  const handleJoinPing = (pingId) => {
-      setActivePings(pings => pings.map(p => p.id === pingId ? { ...p, members: [...p.members, currentUser.id] } : p));
-  };
+        return () => unsubscribers.forEach(unsub => unsub());
+    }, [currentUser?.id]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const canCheckIn = currentUser?.lastCheckIn !== today;
-  
-  const handleCheckIn = () => { 
-      if (canCheckIn) {
-          const newPointRecord = {
-              id: `p-${Date.now()}`,
-              type: 'checkin',
-              description: '每日簽到',
-              points: 10,
-              timestamp: new Date().toISOString()
-          };
-          setPointsHistory(prev => ({
-              ...prev,
-              [currentUser.id]: [newPointRecord, ...(prev[currentUser.id] || [])]
-          }));
-          setCurrentUser({ ...currentUser, points: currentUser.points + 10, lastCheckIn: today }); 
-      }
-  };
+    // --- Handlers ---
+    const showToast = (message, type = 'info') => {
+        setToast({ message, type, id: Date.now() });
+    };
 
-  const handleMarkAllRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
-  const handleToggleFavorite = storeId => setFavorites(prev => prev.includes(storeId) ? prev.filter(id => id !== storeId) : [...prev, storeId]);
-  const handleWish = id => setWishlist(currentWishlist => currentWishlist.map(item => item.id === id && !item.wishedBy.includes(currentUser.id) ? { ...item, wishes: item.wishes + 1, wishedBy: [...item.wishedBy, currentUser.id] } : item).sort((a, b) => b.wishes - a.wishes));
-  const handleAddWish = wishText => setWishlist(prev => [{ id: Date.now(), name: wishText, category: '其他', wishes: 1, wishedBy: [currentUser.id] }, ...prev].sort((a, b) => b.wishes - a.wishes));
-  const handleJoinGroupBuy = id => setGroupBuys(prev => prev.map(item => item.id === id && !(item.joinedBy || []).includes(currentUser.id) ? { ...item, current: item.current + 1, joinedBy: [...(item.joinedBy || []), currentUser.id] } : item));
-  
-  const handleAddToCart = (itemToAdd) => {
-    setCart(prevCart => [...prevCart, { ...itemToAdd, cartId: Date.now() }]);
-  };
+    const handleRegistrationComplete = (newProfile) => {
+        setCurrentUser(newProfile);
+        setIsProfileIncomplete(false);
+        showToast('註冊成功！歡迎加入！', 'success');
+    };
 
-  const handleCheckout = (total) => { 
-    if (currentUser.walletBalance < total) {
-        alert('餘額不足！');
-        return;
-    }
+    const handleProfileUpdate = async (updatedData) => {
+        if (!currentUser) return;
+        const userDocRef = doc(db, "users", currentUser.id);
+        try {
+            const avatarChar = (updatedData.nickname || '').trim()[0] || (updatedData.name || '').trim()[0] || ' ';
+            const newAvatarUrl = `https://placehold.co/100x100/CCCCCC/FFFFFF?text=${encodeURIComponent(avatarChar)}`;
+            const dataToUpdate = { ...updatedData, avatarUrl: newAvatarUrl };
+            await updateDoc(userDocRef, dataToUpdate);
+            setView({ name: 'profile' });
+            showToast('個人資料已更新', 'success');
+        } catch (error) {
+            console.error("Error updating profile: ", error);
+            showToast('更新失敗，請稍後再試', 'error');
+        }
+    };
 
-    const newTransaction = {
-        id: `t-${Date.now()}`,
-        type: 'purchase',
-        description: cart.map(item => `${item.name} x${item.quantity}`).join(', '),
-        amount: -total,
-        timestamp: new Date().toISOString()
+    const handleToggleFavorite = async (storeId) => {
+        if (!currentUser) return;
+        const userDocRef = doc(db, "users", currentUser.id);
+        const currentFavorites = currentUser.favorites || [];
+        const newFavorites = currentFavorites.includes(storeId)
+            ? currentFavorites.filter(id => id !== storeId)
+            : [...currentFavorites, storeId];
+        await updateDoc(userDocRef, { favorites: newFavorites });
+    };
+
+    const handleWish = async (wishId) => {
+        if (!currentUser) return;
+        const wishRef = doc(db, "wishlist", wishId);
+        const wishDoc = await getDoc(wishRef);
+        if (wishDoc.exists()) {
+            const data = wishDoc.data();
+            if (!data.wishedBy.includes(currentUser.id)) {
+                await updateDoc(wishRef, {
+                    wishes: data.wishes + 1,
+                    wishedBy: [...data.wishedBy, currentUser.id]
+                });
+            }
+        }
     };
     
-    setTransactions(prev => ({
-        ...prev,
-        [currentUser.id]: [newTransaction, ...(prev[currentUser.id] || [])]
-    }));
+    const handleAddWish = async (wishText) => {
+        await addDoc(collection(db, "wishlist"), {
+            name: wishText,
+            category: '其他',
+            wishes: 1,
+            wishedBy: [currentUser.id]
+        });
+        showToast('許願成功！', 'success');
+    };
 
-    setCurrentUser({...currentUser, walletBalance: currentUser.walletBalance - total}); 
-    setCart([]); 
-    setIsCartOpen(false); 
-    alert('訂購成功！'); 
-    setSelectedTeaStore(null); 
-    setActiveTab('home');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
-        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
-          <div className="flex flex-col items-center justify-center h-full">
-            <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-            <p className="mt-4 text-gray-500">正在載入...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!firebaseUser) {
-    return (
-      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
-        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
-          <AuthScreen />
-        </div>
-      </div>
-    );
-  }
-  
-  if (isProfileIncomplete) {
-     return (
-      <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
-        <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
-          <RegistrationScreen firebaseUser={firebaseUser} onRegistrationComplete={handleRegistrationComplete} />
-        </div>
-      </div>
-    );
-  }
-
-
-  const renderContent = () => {
-    if (isEditingProfile) {
-        return <EditProfileScreen currentUser={currentUser} onSave={handleProfileUpdate} />;
-    }
-    if (isViewingTransactions) {
-        return <TransactionHistoryScreen transactions={transactions[currentUser.id] || []} />;
-    }
-    if (isViewingPoints) {
-        return <PointHistoryScreen pointsHistory={pointsHistory[currentUser.id] || []} />;
-    }
-    if (selectedTeaStore) {
-        return <TeaOrderScreen store={selectedTeaStore} menu={sampleMenu[selectedTeaStore.id]} onAddToCart={handleAddToCart} />;
-    }
+    const handleCheckIn = async () => {
+        const today = new Date().toISOString().slice(0, 10);
+        if (currentUser?.lastCheckIn !== today) {
+            const userDocRef = doc(db, "users", currentUser.id);
+            const pointsRef = collection(db, "users", currentUser.id, "points");
+            await updateDoc(userDocRef, {
+                points: currentUser.points + 10,
+                lastCheckIn: today
+            });
+            await addDoc(pointsRef, {
+                type: 'checkin',
+                description: '每日簽到',
+                points: 10,
+                timestamp: new Date()
+            });
+            showToast('簽到成功！獲得 10 點', 'success');
+        }
+    };
     
-    let content;
-    switch(activeTab) {
-        case 'home': content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />; break;
-        case 'groupbuy': content = <GroupBuyScreen groupBuys={groupBuys} onSelect={setSelectedGroupBuy} />; break;
-        case 'tea': content = <AfternoonTeaScreen onSelectStore={setSelectedTeaStore} />; break;
-        case 'wishlist': content = <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />; break;
-        case 'profile': content = <ProfileScreen currentUser={currentUser} onCheckIn={handleCheckIn} canCheckIn={canCheckIn} groupBuys={groupBuys} onViewTransactions={() => setIsViewingTransactions(true)} onViewPoints={() => setIsViewingPoints(true)} onViewCompanyInfo={() => setIsCompanyInfoOpen(true)} onLogout={handleLogout} onEditProfile={() => setIsEditingProfile(true)} />; break;
-        default: content = <HomeScreen stores={stores} favorites={favorites} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
+    const handleAddToCart = (itemToAdd) => {
+        setCart(prevCart => [...prevCart, { ...itemToAdd, cartId: Date.now() }]);
+        showToast(`${itemToAdd.name} 已加入購物車`);
+    };
+
+    const handleCheckout = async (total) => {
+        if (currentUser.walletBalance < total) {
+            showToast('餘額不足！', 'error');
+            return;
+        }
+        const userDocRef = doc(db, "users", currentUser.id);
+        const txsRef = collection(db, "users", currentUser.id, "transactions");
+
+        await updateDoc(userDocRef, {
+            walletBalance: currentUser.walletBalance - total
+        });
+        await addDoc(txsRef, {
+            type: 'purchase',
+            description: cart.map(item => `${item.name} x${item.quantity}`).join(', '),
+            amount: -total,
+            timestamp: new Date()
+        });
+
+        setCart([]);
+        setIsCartOpen(false);
+        showToast('訂購成功！', 'success');
+        setView({ name: 'home' });
+        setActiveTab('home');
+    };
+
+    // --- Navigation & Rendering ---
+    const handleBack = () => {
+        const currentViewName = view.name;
+        if (['editProfile', 'transactions', 'points'].includes(currentViewName)) {
+            setView({ name: 'profile' });
+        } else if (currentViewName === 'teaOrder') {
+            setView({ name: 'tea' });
+        } else {
+            setView({ name: 'home' });
+            setActiveTab('home');
+        }
+    };
+    
+    React.useEffect(() => {
+        // Sync view with activeTab for bottom nav
+        if (['home', 'groupbuy', 'tea', 'wishlist'].includes(activeTab)) {
+            setView({ name: activeTab });
+        } else if (activeTab === 'profile') {
+            setView({ name: 'profile' });
+        }
+    }, [activeTab]);
+
+    const renderContent = () => {
+        if (!currentUser) return null;
+
+        switch (view.name) {
+            case 'home': return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={(store) => { /* Navigate to store detail */ }} />;
+            case 'groupbuy': return <GroupBuyScreen groupBuys={groupBuys} onSelect={(item) => { /* Navigate to groupbuy detail */ }} />;
+            case 'tea': return <AfternoonTeaScreen onSelectStore={(store) => setView({ name: 'teaOrder', params: { store } })} />;
+            case 'wishlist': return <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />;
+            case 'profile': return <ProfileScreen currentUser={currentUser} onCheckIn={handleCheckIn} canCheckIn={currentUser?.lastCheckIn !== new Date().toISOString().slice(0, 10)} setView={setView} />;
+            case 'editProfile': return <EditProfileScreen currentUser={currentUser} onSave={handleProfileUpdate} />;
+            case 'transactions': return <TransactionHistoryScreen transactions={transactions} />;
+            case 'points': return <PointHistoryScreen pointsHistory={pointsHistory} />;
+            case 'teaOrder': return <TeaOrderScreen store={view.params.store} onAddToCart={handleAddToCart} />;
+            default: return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
+        }
+    };
+    
+    const getTitle = () => {
+        const titles = {
+            home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '我的帳號',
+            editProfile: '編輯個人資料', transactions: '交易紀錄', points: '點數紀錄',
+            teaOrder: view.params?.store?.name || '訂購'
+        };
+        return titles[view.name] || '企業福利平台';
+    };
+
+    // --- Loading & Auth Screens ---
+    if (isLoading) {
+        return (<div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4"><div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden"><div className="flex flex-col items-center justify-center h-full"><Loader2 className="w-12 h-12 text-blue-500 animate-spin" /><p className="mt-4 text-gray-500">正在載入...</p></div></div></div>);
     }
-    return <div key={activeTab} className="animate-fade-in">{content}</div>;
-  };
+    if (!firebaseUser) {
+        return (<div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4"><div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden"><AuthScreen /></div></div>);
+    }
+    if (isProfileIncomplete) {
+        return (<div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4"><div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden"><RegistrationScreen firebaseUser={firebaseUser} onRegistrationComplete={handleRegistrationComplete} /></div></div>);
+    }
 
-  const getTitle = () => {
-      if (isEditingProfile) return '編輯個人資料';
-      if (isViewingTransactions) return '交易紀錄';
-      if (isViewingPoints) return '點數紀錄';
-      if (selectedTeaStore) return selectedTeaStore.name;
-      return { home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '我的帳號' }[activeTab];
-  };
-  
-  const showBackButton = isEditingProfile || isViewingTransactions || isViewingPoints || !!selectedTeaStore || activeTab === 'profile';
+    const showBackButton = !['home', 'groupbuy', 'tea', 'wishlist', 'profile'].includes(view.name);
+    const showNavBar = ['home', 'groupbuy', 'tea', 'wishlist'].includes(view.name);
 
-  const handleBack = () => {
-      if (isEditingProfile) {
-          setIsEditingProfile(false);
-          return;
-      }
-      if (isViewingTransactions) {
-          setIsViewingTransactions(false);
-      } else if (isViewingPoints) {
-          setIsViewingPoints(false);
-      } else if (selectedTeaStore) {
-          setSelectedTeaStore(null);
-      } else if (activeTab === 'profile') {
-          setActiveTab('home');
-      }
-  };
-
-  return (
-    <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
-      <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
-        <AppHeader 
-          title={getTitle()} 
-          onBack={handleBack}
-          showBackButton={showBackButton} 
-          notifications={notifications} 
-          onMarkAllRead={handleMarkAllRead}
-          onProfileClick={() => {
-              setIsViewingTransactions(false);
-              setIsViewingPoints(false);
-              setSelectedTeaStore(null);
-              setIsEditingProfile(false);
-              setActiveTab('profile');
-          }}
-        />
-        <div className="flex-grow overflow-y-auto">
-            <div className="pb-16">
-                {renderContent()}
+    return (
+        <div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4">
+            <div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden">
+                {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
+                <AppHeader
+                    title={getTitle()}
+                    onBack={handleBack}
+                    showBackButton={showBackButton}
+                    notifications={notifications}
+                    onMarkAllRead={() => { /* Implement mark all read */ }}
+                    onProfileClick={() => { setView({ name: 'profile' }); setActiveTab('profile'); }}
+                />
+                <div className="flex-grow overflow-y-auto">
+                    <div className="pb-16">
+                        {renderContent()}
+                    </div>
+                </div>
+                {showNavBar && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
+                {cart.length > 0 && !isCartOpen && (<div className="absolute bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2 animate-bounce"><ShoppingCart /><span className="font-bold">{cart.reduce((acc, item) => acc + item.quantity, 0)}</span></button></div>)}
+                {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
             </div>
         </div>
-        {activeTab !== 'profile' && !selectedTeaStore && !isViewingTransactions && !isViewingPoints && !isEditingProfile && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
-        {cart.length > 0 && !isCartOpen && (<div className="absolute bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2 animate-bounce"><ShoppingCart /><span className="font-bold">{cart.reduce((acc, item) => acc + item.quantity, 0)}</span></button></div>)}
-        {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
-        <GroupBuyDetailModal item={selectedGroupBuy} user={currentUser} onClose={() => setSelectedGroupBuy(null)} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={activePings} />
-        {isCompanyInfoOpen && <CompanyInfoModal company={companies[currentUser.companyId]} onClose={() => setIsCompanyInfoOpen(false)} />}
-      </div>
-    </div>
-  );
+    );
 }
