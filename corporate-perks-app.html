@@ -1058,8 +1058,7 @@ export default function App() {
         
         await batch.commit();
         showToast('已成功發起拼團！', 'success');
-        setView({ name: 'groupbuy' });
-    }
+    };
 
     const handleJoinPing = async (pingId, item) => {
          if(currentUser.walletBalance < item.groupPrice) {
