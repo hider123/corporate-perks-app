@@ -1,11 +1,10 @@
 import React from 'react';
 import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 // --- Firebase Configuration ---
-// These global variables will be provided by the environment.
 const firebaseConfig = {
   apiKey: "AIzaSyCH19CEf7ybXeJE-ZErIScVc8fXFrwh5Zw",
   authDomain: "corporate-perks-app.firebaseapp.com",
@@ -40,7 +39,6 @@ const translateAuthError = (code) => {
 
 
 // --- Mock Data for Initial Seeding ---
-// This data is used to populate Firestore for the first time.
 const MOCK_COMPANIES = {
     'company-a': { id: 'company-a', name: '卓越科技有限公司', address: '台北市信義區信義路五段7號 89樓', phone: '02-8101-8888', welfareId: 'WEL-TW-101' },
     'company-b': { id: 'company-b', name: '創新國際股份有限公司', address: '新竹市東區科學園區工業東二路1號', phone: '03-578-1234', welfareId: 'WEL-HS-007' },
@@ -218,7 +216,6 @@ const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
     const handleSubmit = e => { 
         e.preventDefault(); 
         if (wishText.trim().length < 2 || !isNaN(wishText.trim())) {
-            // In a real app, use a modal or toast instead of alert.
             alert("請輸入有效的店家名稱 (至少兩個字元，且不能純為數字)");
             return;
         }
@@ -443,11 +440,10 @@ const GroupBuyScreen = ({ groupBuys, onSelect }) => {
     );
 };
 
-const AfternoonTeaScreen = ({ onSelectStore }) => (<main className="p-4 space-y-3">{MOCK_TEA_STORES.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
+const AfternoonTeaScreen = ({ teaStores, onSelectStore }) => (<main className="p-4 space-y-3">{teaStores.map(store => (<div key={store.id} onClick={() => onSelectStore(store)} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center space-x-4 active:bg-gray-100 transition-colors cursor-pointer"><img src={store.logo} alt={store.name} className="w-16 h-16 rounded-lg" /><div><h3 className="font-bold text-lg">{store.name}</h3><p className="text-sm text-gray-500">{store.description}</p></div></div>))}</main>);
 
-const TeaOrderScreen = ({ store, onAddToCart }) => {
+const TeaOrderScreen = ({ store, menu, onAddToCart }) => {
     const [selectedItem, setSelectedItem] = React.useState(null);
-    const menu = MOCK_TEA_MENU[store.id] || [];
 
     const handleAddToCart = (item, options, quantity) => {
         onAddToCart({ ...item, options, quantity });
@@ -798,6 +794,9 @@ export default function App() {
     const [stores, setStores] = React.useState([]);
     const [wishlist, setWishlist] = React.useState([]);
     const [groupBuys, setGroupBuys] = React.useState([]);
+    const [teaStores, setTeaStores] = React.useState([]);
+    const [teaMenus, setTeaMenus] = React.useState({});
+    const [pings, setPings] = React.useState([]);
     const [notifications, setNotifications] = React.useState([]);
     const [transactions, setTransactions] = React.useState([]);
     const [pointsHistory, setPointsHistory] = React.useState([]);
@@ -805,7 +804,7 @@ export default function App() {
     // --- Data Seeding ---
     React.useEffect(() => {
         const seedData = async () => {
-            const seedFlagRef = doc(db, "system", "seeded");
+            const seedFlagRef = doc(db, "system", "seeded_v2");
             const seedFlagSnap = await getDoc(seedFlagRef);
             if (!seedFlagSnap.exists()) {
                 console.log("First time setup: Seeding database...");
@@ -823,8 +822,18 @@ export default function App() {
                     const wishRef = doc(db, "wishlist", wish.id);
                     batch.set(wishRef, wish);
                 });
+                MOCK_TEA_STORES.forEach(ts => {
+                    const tsRef = doc(db, "teaStores", ts.id);
+                    batch.set(tsRef, ts);
+                    if(MOCK_TEA_MENU[ts.id]){
+                        MOCK_TEA_MENU[ts.id].forEach(item => {
+                            const itemRef = doc(db, `teaStores/${ts.id}/menu`, item.id);
+                            batch.set(itemRef, item);
+                        });
+                    }
+                });
 
-                batch.set(seedFlagRef, { done: true });
+                batch.set(seedFlagRef, { done: true, timestamp: serverTimestamp() });
                 await batch.commit();
                 console.log("Database seeded successfully.");
             }
@@ -844,12 +853,10 @@ export default function App() {
                     setCurrentUser({ id: user.uid, ...userDocSnap.data() });
                     setIsProfileIncomplete(false);
                 } else {
-                    // User is authenticated but hasn't completed registration
                     setIsProfileIncomplete(true);
                     setCurrentUser(null);
                 }
             } else {
-                // No user is signed in
                 setFirebaseUser(null);
                 setCurrentUser(null);
                 setIsProfileIncomplete(false);
@@ -864,42 +871,37 @@ export default function App() {
         if (!currentUser?.id) return;
 
         const unsubscribers = [
-            onSnapshot(collection(db, "stores"), (snapshot) => {
-                setStores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }),
-            onSnapshot(collection(db, "wishlist"), (snapshot) => {
-                const sortedWishlist = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.wishes - a.wishes);
-                setWishlist(sortedWishlist);
-            }),
-            onSnapshot(collection(db, "groupBuys"), (snapshot) => {
-                setGroupBuys(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }),
-            onSnapshot(collection(db, "users", currentUser.id, "notifications"), (snapshot) => {
-                setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }),
-            onSnapshot(collection(db, "users", currentUser.id, "transactions"), (snapshot) => {
-                const sortedTxs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate());
-                setTransactions(sortedTxs);
-            }),
-            onSnapshot(collection(db, "users", currentUser.id, "points"), (snapshot) => {
-                const sortedPoints = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate());
-                setPointsHistory(sortedPoints);
-            }),
-            onSnapshot(doc(db, "users", currentUser.id), (doc) => {
-                 if (doc.exists()) {
-                    setCurrentUser({ id: doc.id, ...doc.data() });
-                 }
-            })
+            onSnapshot(collection(db, "stores"), snap => setStores(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+            onSnapshot(collection(db, "wishlist"), snap => setWishlist(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.wishes - a.wishes))),
+            onSnapshot(collection(db, "groupBuys"), snap => setGroupBuys(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+            onSnapshot(collection(db, "teaStores"), snap => setTeaStores(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+            onSnapshot(collection(db, "pings"), snap => setPings(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+            onSnapshot(collection(db, "users", currentUser.id, "notifications"), snap => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+            onSnapshot(collection(db, "users", currentUser.id, "transactions"), snap => setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate()))),
+            onSnapshot(collection(db, "users", currentUser.id, "points"), snap => setPointsHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate()))),
+            onSnapshot(doc(db, "users", currentUser.id), doc => { if (doc.exists()) setCurrentUser({ id: doc.id, ...doc.data() }); })
         ];
 
         return () => unsubscribers.forEach(unsub => unsub());
     }, [currentUser?.id]);
 
-    // --- Handlers ---
-    const showToast = (message, type = 'info') => {
-        setToast({ message, type, id: Date.now() });
-    };
+    React.useEffect(() => {
+        if(teaStores.length > 0) {
+            const fetchMenus = async () => {
+                const menus = {};
+                for (const store of teaStores) {
+                    const menuCol = collection(db, `teaStores/${store.id}/menu`);
+                    const menuSnap = await getDocs(menuCol);
+                    menus[store.id] = menuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                setTeaMenus(menus);
+            }
+            fetchMenus();
+        }
+    }, [teaStores]);
 
+    // --- Handlers ---
+    const showToast = (message, type = 'info') => setToast({ message, type, id: Date.now() });
     const handleRegistrationComplete = (newProfile) => {
         setCurrentUser(newProfile);
         setIsProfileIncomplete(false);
@@ -1006,10 +1008,42 @@ export default function App() {
         setActiveTab('home');
     };
 
+    const handleStartPing = async (item) => {
+        if(currentUser.walletBalance < item.groupPrice) {
+            showToast('錢包餘額不足', 'error');
+            return;
+        }
+        const newPing = {
+            itemId: item.id,
+            leader: currentUser.id,
+            members: [currentUser.id],
+            endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: serverTimestamp()
+        };
+        await addDoc(collection(db, 'pings'), newPing);
+        // Deduct balance and create transaction
+        showToast('已成功發起拼團！', 'success');
+        setView({ name: 'groupbuy' });
+    }
+
+    const handleJoinPing = async (pingId, item) => {
+         if(currentUser.walletBalance < item.groupPrice) {
+            showToast('錢包餘額不足', 'error');
+            return;
+        }
+        const pingRef = doc(db, 'pings', pingId);
+        await updateDoc(pingRef, {
+            members: arrayUnion(currentUser.id)
+        });
+        // Deduct balance and create transaction
+        showToast('已成功加入拼團！', 'success');
+    }
+
+
     // --- Navigation & Rendering ---
     const handleBack = () => {
         const currentViewName = view.name;
-        if (['editProfile', 'transactions', 'points'].includes(currentViewName)) {
+        if (['editProfile', 'transactions', 'points', 'groupBuyDetail'].includes(currentViewName)) {
             setView({ name: 'profile' });
         } else if (currentViewName === 'teaOrder') {
             setView({ name: 'tea' });
@@ -1020,7 +1054,6 @@ export default function App() {
     };
     
     React.useEffect(() => {
-        // Sync view with activeTab for bottom nav
         if (['home', 'groupbuy', 'tea', 'wishlist'].includes(activeTab)) {
             setView({ name: activeTab });
         } else if (activeTab === 'profile') {
@@ -1033,14 +1066,15 @@ export default function App() {
 
         switch (view.name) {
             case 'home': return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={(store) => { /* Navigate to store detail */ }} />;
-            case 'groupbuy': return <GroupBuyScreen groupBuys={groupBuys} onSelect={(item) => { /* Navigate to groupbuy detail */ }} />;
-            case 'tea': return <AfternoonTeaScreen onSelectStore={(store) => setView({ name: 'teaOrder', params: { store } })} />;
+            case 'groupbuy': return <GroupBuyScreen groupBuys={groupBuys} onSelect={(item) => setView({name: 'groupBuyDetail', params: {item}})} />;
+            case 'tea': return <AfternoonTeaScreen teaStores={teaStores} onSelectStore={(store) => setView({ name: 'teaOrder', params: { store } })} />;
             case 'wishlist': return <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />;
             case 'profile': return <ProfileScreen currentUser={currentUser} onCheckIn={handleCheckIn} canCheckIn={currentUser?.lastCheckIn !== new Date().toISOString().slice(0, 10)} setView={setView} />;
             case 'editProfile': return <EditProfileScreen currentUser={currentUser} onSave={handleProfileUpdate} />;
             case 'transactions': return <TransactionHistoryScreen transactions={transactions} />;
             case 'points': return <PointHistoryScreen pointsHistory={pointsHistory} />;
-            case 'teaOrder': return <TeaOrderScreen store={view.params.store} onAddToCart={handleAddToCart} />;
+            case 'teaOrder': return <TeaOrderScreen store={view.params.store} menu={teaMenus[view.params.store.id] || []} onAddToCart={handleAddToCart} />;
+            case 'groupBuyDetail': return <GroupBuyDetailModal item={view.params.item} user={currentUser} onClose={() => setView({name: 'groupbuy'})} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={pings.filter(p => p.itemId === view.params.item.id)} />;
             default: return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
         }
     };
@@ -1049,7 +1083,8 @@ export default function App() {
         const titles = {
             home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '我的帳號',
             editProfile: '編輯個人資料', transactions: '交易紀錄', points: '點數紀錄',
-            teaOrder: view.params?.store?.name || '訂購'
+            teaOrder: view.params?.store?.name || '訂購',
+            groupBuyDetail: '商品詳情'
         };
         return titles[view.name] || '企業福利平台';
     };
@@ -1092,3 +1127,93 @@ export default function App() {
         </div>
     );
 }
+
+// --- Modals for Group Buy ---
+const GroupBuyDetailModal = ({ item, user, onClose, onStartPing, onJoinPing, activePings }) => {
+    if (!item) return null;
+
+    const userPing = activePings.find(p => p.members.includes(user.id));
+    if (userPing) {
+        return <PingStatusModal ping={userPing} item={item} user={user} onClose={onClose} />;
+    }
+    
+    const availablePings = activePings.filter(p => p.members.length < item.groupSize);
+
+    return (
+        <div className="absolute inset-0 bg-white z-40 animate-fade-in">
+            <div className="h-full w-full flex flex-col">
+                <div className="bg-white sticky top-0 z-10 border-b border-gray-200"><div className="px-4 h-14 flex items-center justify-between"><button onClick={onClose} className="text-blue-600 font-semibold">返回</button><h2 className="font-bold text-gray-800">商品詳情</h2><div className="w-12"></div></div></div>
+                <div className="flex-grow overflow-y-auto">
+                    <img src={item.imageUrl} alt={item.name} className="w-full h-64 object-cover" />
+                    <div className="p-4">
+                        <h2 className="text-3xl font-bold">{item.name}</h2>
+                        <p className="text-gray-700 mt-4">{item.description}</p>
+                    </div>
+                    {availablePings.length > 0 && (
+                        <div className="p-4">
+                            <h3 className="font-bold mb-2">進行中的團 (可直接加入)</h3>
+                            <div className="space-y-2">{availablePings.map(ping => <PingJoinCard key={ping.id} ping={ping} item={item} onJoinPing={onJoinPing} />)}</div>
+                        </div>
+                    )}
+                </div>
+                <div className="p-4 bg-white border-t grid grid-cols-2 gap-2">
+                    <button className="bg-gray-200 text-gray-800 font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.marketPrice}</span><span className="text-xs">單獨購買</span></button>
+                    <button onClick={() => onStartPing(item)} className="bg-red-500 text-white font-bold py-3 rounded-lg flex flex-col items-center"><span>NT$ {item.groupPrice}</span><span className="text-xs">{item.groupSize}人拼團</span></button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const PingJoinCard = ({ ping, item, onJoinPing }) => {
+    const { timeLeft, isEnded } = useCountdown(ping.endDate);
+    if (isEnded) return null;
+
+    const daysText = timeLeft.days > 0 ? `${timeLeft.days}天 ` : '';
+    const hoursText = `${String(timeLeft.hours).padStart(2, '0')}`;
+    const minutesText = `${String(timeLeft.minutes).padStart(2, '0')}`;
+    const countdownText = `剩餘 ${daysText}${hoursText}:${minutesText}`;
+
+    return (
+        <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center">
+                 <User className="w-10 h-10 rounded-full bg-gray-300 p-2" />
+                <div className="ml-3">
+                    <p className="font-semibold">一位同事的團</p>
+                    <p className="text-xs text-gray-500">還差 {item.groupSize - ping.members.length} 人，{countdownText}</p>
+                </div>
+            </div>
+            <button onClick={() => onJoinPing(ping.id, item)} className="bg-red-500 text-white font-bold px-4 py-2 rounded-lg text-sm">加入</button>
+        </div>
+    );
+};
+
+const PingStatusModal = ({ ping, item, user, onClose }) => {
+    const { timeLeft, isEnded } = useCountdown(ping.endDate);
+    const isSuccess = ping.members.length >= item.groupSize;
+    const handleShare = () => {
+        alert(`已複製拼團連結！\n快來加入「${item.name}」團！還差 ${item.groupSize - ping.members.length} 人！`);
+    }
+
+    const countdownText = `${timeLeft.days > 0 ? `${timeLeft.days}天 ` : ''}${String(timeLeft.hours).padStart(2, '0')}:${String(timeLeft.minutes).padStart(2, '0')}:${String(timeLeft.seconds).padStart(2, '0')}`;
+
+    return (
+        <div className="absolute inset-0 bg-white z-40 animate-fade-in">
+            <div className="h-full w-full flex flex-col items-center p-4">
+                <div className="w-full flex justify-end"><button onClick={onClose} className="text-blue-600 font-semibold">完成</button></div>
+                <div className="text-center mt-8">
+                    <h2 className="text-2xl font-bold">{isSuccess ? "拼團成功！" : isEnded ? "拼團失敗" : "拼團中..."}</h2>
+                    <p className="text-gray-600 mt-2">{isSuccess ? "已為您成立訂單" : isEnded ? "已將款項退回您的錢包" : `還差 ${item.groupSize - ping.members.length} 人，快邀請同事加入！`}</p>
+                    <div className="mt-4 font-semibold text-2xl text-red-500">{isEnded || isSuccess ? "" : countdownText}</div>
+                </div>
+                <div className="my-8 flex items-center space-x-2">
+                    {ping.members.map(memberId => <User key={memberId} className="w-12 h-12 rounded-full border-2 border-white bg-blue-200 p-2" />)}
+                    {[...Array(item.groupSize - ping.members.length)].map((_, i) => <div key={i} className="w-12 h-12 rounded-full bg-gray-200 border-2 border-dashed flex items-center justify-center"><User className="text-gray-400" /></div>)}
+                </div>
+                <div className="w-full max-w-sm">
+                    <button onClick={handleShare} disabled={isSuccess || isEnded} className="w-full bg-red-500 text-white font-bold py-4 rounded-lg text-lg disabled:bg-gray-400 flex items-center justify-center gap-2"><Share2 />邀請同事加入</button>
+                </div>
+            </div>
+        </div>
+    );
+};
