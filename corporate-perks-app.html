@@ -1,7 +1,7 @@
 import React from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info } from 'lucide-react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info, UploadCloud, Badge } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 // --- Firebase Configuration ---
@@ -273,8 +273,16 @@ const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, setView }) => (
                 <button className="bg-white/20 hover:bg-white/30 w-full py-2 rounded-lg font-semibold">儲值</button>
             </div>
         </div>
+
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <button onClick={() => setView({ name: 'points' })} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors">
+             <button onClick={() => setView({ name: 'idCard' })} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors">
+                <div className="flex items-center space-x-3">
+                    <Badge className="w-6 h-6 text-blue-500" />
+                    <span className="font-semibold">我的員工證</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+            </button>
+            <button onClick={() => setView({ name: 'points' })} className="w-full text-left p-4 flex justify-between items-center active:bg-gray-100 transition-colors border-t border-gray-200">
                 <div className="flex items-center space-x-3">
                     <Award className="w-6 h-6 text-blue-500" />
                     <span className="font-semibold">我的點數</span>
@@ -680,6 +688,7 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
             lastCheckIn: '',
             walletBalance: 0,
             status: 'pending_verification',
+            idCardUrl: '',
         };
 
         try {
@@ -923,6 +932,18 @@ export default function App() {
             showToast('更新失敗，請稍後再試', 'error');
         }
     };
+    
+    const handleIdUpload = async (dataUrl) => {
+        if (!currentUser) return;
+        const userDocRef = doc(db, "users", currentUser.id);
+        try {
+            await updateDoc(userDocRef, { idCardUrl: dataUrl });
+            showToast('識別證已更新', 'success');
+        } catch (error) {
+            console.error("Error uploading ID card:", error);
+            showToast('上傳失敗，請稍後再試', 'error');
+        }
+    };
 
     const handleToggleFavorite = async (storeId) => {
         if (!currentUser) return;
@@ -1013,15 +1034,29 @@ export default function App() {
             showToast('錢包餘額不足', 'error');
             return;
         }
-        const newPing = {
+        const batch = writeBatch(db);
+        const userRef = doc(db, "users", currentUser.id);
+        const pingRef = doc(collection(db, 'pings'));
+        const txRef = doc(collection(db, `users/${currentUser.id}/transactions`));
+        
+        batch.update(userRef, { walletBalance: increment(-item.groupPrice) });
+        batch.set(pingRef, {
             itemId: item.id,
             leader: currentUser.id,
             members: [currentUser.id],
             endDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            createdAt: serverTimestamp()
-        };
-        await addDoc(collection(db, 'pings'), newPing);
-        // Deduct balance and create transaction
+            createdAt: serverTimestamp(),
+            status: 'active'
+        });
+        batch.set(txRef, {
+            type: 'groupbuy_hold',
+            description: `[預扣] ${item.name}`,
+            amount: -item.groupPrice,
+            timestamp: serverTimestamp(),
+            pingId: pingRef.id
+        });
+        
+        await batch.commit();
         showToast('已成功發起拼團！', 'success');
         setView({ name: 'groupbuy' });
     }
@@ -1031,11 +1066,22 @@ export default function App() {
             showToast('錢包餘額不足', 'error');
             return;
         }
+        const batch = writeBatch(db);
+        const userRef = doc(db, "users", currentUser.id);
         const pingRef = doc(db, 'pings', pingId);
-        await updateDoc(pingRef, {
-            members: arrayUnion(currentUser.id)
+        const txRef = doc(collection(db, `users/${currentUser.id}/transactions`));
+        
+        batch.update(userRef, { walletBalance: increment(-item.groupPrice) });
+        batch.update(pingRef, { members: arrayUnion(currentUser.id) });
+        batch.set(txRef, {
+            type: 'groupbuy_hold',
+            description: `[預扣] ${item.name}`,
+            amount: -item.groupPrice,
+            timestamp: serverTimestamp(),
+            pingId: pingRef.id
         });
-        // Deduct balance and create transaction
+
+        await batch.commit();
         showToast('已成功加入拼團！', 'success');
     }
 
@@ -1043,10 +1089,15 @@ export default function App() {
     // --- Navigation & Rendering ---
     const handleBack = () => {
         const currentViewName = view.name;
-        if (['editProfile', 'transactions', 'points', 'groupBuyDetail'].includes(currentViewName)) {
+        if (['editProfile', 'transactions', 'points', 'idCard'].includes(currentViewName)) {
             setView({ name: 'profile' });
+        } else if (currentViewName === 'groupBuyDetail') {
+            setView({ name: 'groupbuy' });
         } else if (currentViewName === 'teaOrder') {
             setView({ name: 'tea' });
+        } else if (currentViewName === 'profile') {
+            setView({ name: 'home' });
+            setActiveTab('home');
         } else {
             setView({ name: 'home' });
             setActiveTab('home');
@@ -1073,6 +1124,7 @@ export default function App() {
             case 'editProfile': return <EditProfileScreen currentUser={currentUser} onSave={handleProfileUpdate} />;
             case 'transactions': return <TransactionHistoryScreen transactions={transactions} />;
             case 'points': return <PointHistoryScreen pointsHistory={pointsHistory} />;
+            case 'idCard': return <IdCardModal currentUser={currentUser} onUpload={handleIdUpload} onClose={() => setView({name: 'profile'})} />;
             case 'teaOrder': return <TeaOrderScreen store={view.params.store} menu={teaMenus[view.params.store.id] || []} onAddToCart={handleAddToCart} />;
             case 'groupBuyDetail': return <GroupBuyDetailModal item={view.params.item} user={currentUser} onClose={() => setView({name: 'groupbuy'})} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={pings.filter(p => p.itemId === view.params.item.id)} />;
             default: return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
@@ -1084,7 +1136,8 @@ export default function App() {
             home: '特約商店', groupbuy: '社交拼團', tea: '訂下午茶', wishlist: '許願池', profile: '我的帳號',
             editProfile: '編輯個人資料', transactions: '交易紀錄', points: '點數紀錄',
             teaOrder: view.params?.store?.name || '訂購',
-            groupBuyDetail: '商品詳情'
+            groupBuyDetail: '商品詳情',
+            idCard: '我的員工證'
         };
         return titles[view.name] || '企業福利平台';
     };
@@ -1100,7 +1153,7 @@ export default function App() {
         return (<div className="bg-gray-100 min-h-screen font-sans flex justify-center items-center p-4"><div className="w-full max-w-md mx-auto bg-white shadow-lg rounded-3xl border-8 border-black relative h-[800px] flex flex-col overflow-hidden"><RegistrationScreen firebaseUser={firebaseUser} onRegistrationComplete={handleRegistrationComplete} /></div></div>);
     }
 
-    const showBackButton = !['home', 'groupbuy', 'tea', 'wishlist', 'profile'].includes(view.name);
+    const showBackButton = !['home', 'groupbuy', 'tea', 'wishlist'].includes(view.name);
     const showNavBar = ['home', 'groupbuy', 'tea', 'wishlist'].includes(view.name);
 
     return (
@@ -1128,7 +1181,68 @@ export default function App() {
     );
 }
 
-// --- Modals for Group Buy ---
+// --- Modals ---
+const IdCardModal = ({ currentUser, onUpload, onClose }) => {
+    const fileInputRef = React.useRef(null);
+    const [isUploading, setIsUploading] = React.useState(false);
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            setIsUploading(true);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                onUpload(e.target.result);
+                setIsUploading(false);
+            };
+            reader.onerror = () => {
+                setIsUploading(false);
+                alert("讀取檔案失敗");
+            }
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const triggerFileUpload = () => {
+        fileInputRef.current.click();
+    };
+
+    return (
+        <div className="absolute inset-0 bg-gray-800 z-40 animate-fade-in p-4 flex flex-col justify-center items-center">
+             <button onClick={onClose} className="absolute top-4 right-4 text-white bg-black/30 rounded-full p-2"><X size={24}/></button>
+            <div className="w-full max-w-sm bg-white rounded-2xl p-6 text-center shadow-2xl">
+                <h2 className="text-xl font-bold text-gray-800">{currentUser.name}</h2>
+                <p className="text-gray-500">{MOCK_COMPANIES[currentUser.companyId]?.name}</p>
+                <div className="mt-4 w-full aspect-[1.586/1] bg-gray-100 rounded-lg flex justify-center items-center overflow-hidden border-2 border-dashed">
+                    {currentUser.idCardUrl ? (
+                         <img src={currentUser.idCardUrl} alt="員工識別證" className="w-full h-full object-contain" />
+                    ) : (
+                        <div className="text-gray-400 flex flex-col items-center">
+                            <Badge size={48} />
+                            <p className="mt-2 font-semibold">尚未上傳識別證</p>
+                        </div>
+                    )}
+                </div>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept="image/*"
+                />
+                <button 
+                    onClick={triggerFileUpload} 
+                    disabled={isUploading}
+                    className="mt-6 w-full bg-blue-600 text-white font-bold py-3 rounded-lg active:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center gap-2"
+                >
+                    {isUploading ? <Loader2 className="animate-spin" /> : <UploadCloud />}
+                    {currentUser.idCardUrl ? '更換照片' : '上傳照片'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const GroupBuyDetailModal = ({ item, user, onClose, onStartPing, onJoinPing, activePings }) => {
     if (!item) return null;
 
