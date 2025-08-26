@@ -1,7 +1,7 @@
 import React from 'react';
-import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info, UploadCloud, Badge } from 'lucide-react';
+import { Search, MapPin, Building, X, ThumbsUp, Star, QrCode, ArrowLeft, Users, Heart, PlusCircle, Home, Gift, User, Bell, Tag, Share2, CheckCircle, Award, ShoppingBag, ChevronRight, Clock, Wallet, Coffee, Minus, Plus, ShoppingCart, Loader2, LogOut, Camera, Info, UploadCloud, Badge, ShieldCheck, Plane, Building2, MessageCircle, Send } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs, arrayUnion, serverTimestamp, increment } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, onSnapshot, addDoc, query, where, writeBatch, getDocs, arrayUnion, serverTimestamp, increment, orderBy, arrayRemove } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 // --- Firebase Configuration ---
@@ -37,6 +37,21 @@ const translateAuthError = (code) => {
   return map[code] || code || '發生未知錯誤';
 };
 
+const formatRelativeTime = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}天前`;
+    if (hours > 0) return `${hours}小時前`;
+    if (minutes > 0) return `${minutes}分鐘前`;
+    return '剛剛';
+};
+
 
 // --- Mock Data for Initial Seeding ---
 const MOCK_COMPANIES = {
@@ -51,13 +66,16 @@ const MOCK_STORES = [
 ];
 
 const MOCK_GROUP_BUYS = [
-    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'gb-3', name: '精品濾掛咖啡組', description: '嚴選阿拉比卡咖啡豆，中度烘焙帶有果香風味，讓您在辦公室也能享受一杯好咖啡。', marketPrice: 800, groupPrice: 550, groupSize: 5, imageUrl: 'https://placehold.co/600x400/795548/FFFFFF?text=咖啡組', endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }, // Ended
+    { id: 'gb-1', name: '辦公室零食箱 (豪華版)', description: '精選來自世界各地的20種人氣零食，從經典洋芋片到健康堅果棒，一次滿足您辦公室的味蕾。適合部門分享，提振下午精神！', marketPrice: 1200, groupPrice: 899, groupSize: 3, imageUrl: 'https://placehold.co/600x400/FFC107/FFFFFF?text=零食箱', endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), tags: ['零食', '辦公室', '分享'] },
+    { id: 'gb-2', name: '人氣店家手作蛋捲禮盒', description: '每日新鮮現做，採用頂級原料，口感酥脆香濃。無論是送禮還是自用，都是最有誠意的選擇。限量供應，售完為止。', marketPrice: 500, groupPrice: 380, groupSize: 2, imageUrl: 'https://placehold.co/600x400/4CAF50/FFFFFF?text=蛋捲禮盒', endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), tags: ['甜點', '送禮', '限量'] },
+    { id: 'gb-3', name: '精品濾掛咖啡組', description: '嚴選阿拉比卡咖啡豆，中度烘焙帶有果香風味，讓您在辦公室也能享受一杯好咖啡。', marketPrice: 800, groupPrice: 550, groupSize: 5, imageUrl: 'https://placehold.co/600x400/795548/FFFFFF?text=咖啡組', endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), tags: ['咖啡', '飲品', '提神'] }, // Ended
 ];
 
 const MOCK_WISHLIST = [
-    { id: 'wish-1', name: '海底撈火鍋', category: '美食餐飲', wishes: 128, wishedBy: [] }
+    { text: '希望公司樓下開一間海底撈', category: '店家', wishes: 128, wishedBy: [], creatorId: 'mock-user-1', createdAt: new Date(Date.now() - 86400000 * 3), commentCount: 2 },
+    { text: '想要一台Dyson吸塵器當生日禮物', category: '禮物', wishes: 73, wishedBy: [], creatorId: 'mock-user-2', createdAt: new Date(Date.now() - 86400000 * 2), commentCount: 5 },
+    { text: '想去冰島看極光', category: '旅遊', wishes: 210, wishedBy: [], creatorId: 'mock-user-1', createdAt: new Date(Date.now() - 86400000), commentCount: 10 },
+    { text: '希望能順利交到女朋友', category: '生活', wishes: 55, wishedBy: [], creatorId: 'mock-user-2', createdAt: new Date(), commentCount: 0 },
 ];
 
 const MOCK_TEA_STORES = [
@@ -75,10 +93,6 @@ const MOCK_TEA_MENU = {
         { id: 'kbk-2', name: '白玉歐蕾', price: 60, options: { sugar: ['正常', '八分', '五分', '三分', '無糖'], ice: ['正常', '少冰', '微冰', '去冰'] }, imageUrl: 'https://placehold.co/400x400/D7CCC8/3E2723?text=白玉歐蕾' },
     ],
 };
-
-const SUGGESTION_DATABASE = [
-    '路易莎咖啡 (LOUISA COFFEE)', '大苑子', '康是美', 'NET 主富服飾', '鼎泰豐', '鼎王麻辣鍋', 'IKEA 宜家家居', '家樂福 Carrefour', '全聯福利中心'
-];
 
 // --- Custom Hooks ---
 const useCountdown = (endDate) => {
@@ -194,50 +208,141 @@ const HomeScreen = ({ stores, currentUser, onToggleFavorite, onSelectStore }) =>
     return (<main className="p-4 space-y-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" placeholder="搜尋商店名稱..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full h-11 pl-10 pr-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" /></div>{recommendedStores.length > 0 && (<div><h2 className="font-bold text-gray-800 mb-2">為您推薦</h2><div className="flex space-x-4 overflow-x-auto pb-2 -mx-4 px-4">{recommendedStores.map(store => <StoreCard key={store.id} store={store} onSelect={onSelectStore} isFavorite={favorites.includes(store.id)} onToggleFavorite={onToggleFavorite} small />)}</div></div>)}<CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} /><div className="space-y-3">{filteredStores.length > 0 ? filteredStores.map(store => <StoreCard key={store.id} store={store} onSelect={onSelectStore} isFavorite={favorites.includes(store.id)} onToggleFavorite={onToggleFavorite} />) : <div className="text-center py-16"><p className="text-gray-500">找不到符合條件的商店。</p></div>}</div></main>);
 };
 
-const WishlistScreen = ({ wishlist, currentUser, onWish, onAddWish }) => {
-    const [wishText, setWishText] = React.useState('');
-    const [suggestions, setSuggestions] = React.useState([]);
-    
-    const handleInputChange = (e) => {
-        const value = e.target.value;
-        setWishText(value);
-        if (value.length > 0) {
-            setSuggestions(SUGGESTION_DATABASE.filter(item => item.toLowerCase().includes(value.toLowerCase())));
-        } else {
-            setSuggestions([]);
-        }
-    };
+const WishlistScreen = ({ wishlist, currentUser, allUsers, onWish, onAddWish, setView, onSendMessage }) => {
+    const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
+    const [selectedCategory, setSelectedCategory] = React.useState('所有');
 
-    const handleSuggestionClick = (name) => {
-        setWishText(name);
-        setSuggestions([]);
-    };
+    const wishCategories = ['所有', '店家', '禮物', '旅遊', '生活'];
 
-    const handleSubmit = e => { 
-        e.preventDefault(); 
-        if (wishText.trim().length < 2 || !isNaN(wishText.trim())) {
-            alert("請輸入有效的店家名稱 (至少兩個字元，且不能純為數字)");
-            return;
-        }
-        onAddWish(wishText.trim()); 
-        setWishText(''); 
+    const filteredWishes = React.useMemo(() => {
+        if (selectedCategory === '所有') return wishlist;
+        return wishlist.filter(wish => wish.category === selectedCategory);
+    }, [wishlist, selectedCategory]);
+
+    const getUserInfo = (userId) => {
+        const user = allUsers.find(u => u.id === userId);
+        return user || { name: '匿名', avatarUrl: 'https://placehold.co/100x100/CCCCCC/FFFFFF?text=?' };
     };
 
     return (
         <main className="p-4">
-            <ul className="bg-white rounded-xl overflow-hidden border border-gray-200">{wishlist.map((item, index) => (<li key={item.id} className={`flex items-center justify-between p-4 ${index < wishlist.length - 1 ? 'border-b border-gray-200' : ''}`}><div><p className="font-semibold text-gray-800">{item.name}</p><p className="text-sm text-gray-500">{item.wishes} 人許願</p></div><button onClick={() => onWish(item.id)} disabled={item.wishedBy.includes(currentUser.id)} className={`w-24 text-white font-bold py-2 px-4 rounded-full transition-colors duration-300 flex items-center justify-center text-sm ${ item.wishedBy.includes(currentUser.id) ? 'bg-gray-300' : 'bg-yellow-500 active:bg-yellow-600'}`}><ThumbsUp size={16} className="mr-2" />{item.wishedBy.includes(currentUser.id) ? '已許願' : '+1'}</button></li>))}</ul>
-            <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
-                <div className="relative flex-grow">
-                    <input type="text" value={wishText} onChange={handleInputChange} placeholder="輸入您想要的店家..." className="w-full h-12 px-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500"/>
-                    {suggestions.length > 0 && (
-                        <ul className="absolute bottom-full mb-1 w-full bg-white border rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
-                           {suggestions.map(s => <li key={s} onClick={() => handleSuggestionClick(s)} className="p-2 hover:bg-gray-100 cursor-pointer">{s}</li>)}
-                        </ul>
-                    )}
-                </div>
-                <button type="submit" className="h-12 bg-green-500 text-white font-bold px-4 rounded-lg flex items-center justify-center active:bg-green-600"><PlusCircle size={20} /></button>
-            </form>
+            <div className="flex items-center space-x-2 overflow-x-auto pb-4">
+                {wishCategories.map(cat => (
+                    <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>{cat}</button>
+                ))}
+            </div>
+            <div className="space-y-3">
+                {filteredWishes.length > 0 ? filteredWishes.map(wish => (
+                    <WishCard key={wish.id} wish={wish} currentUser={currentUser} onWish={onWish} creator={getUserInfo(wish.creatorId)} onSelect={() => setView({ name: 'wishDetail', params: { wishId: wish.id } })} onSendMessage={onSendMessage} />
+                )) : <p className="text-center text-gray-500 py-16">這個分類還沒有願望喔！</p>}
+            </div>
+            <button onClick={() => setIsAddModalOpen(true)} className="fixed bottom-20 right-4 bg-green-500 text-white rounded-full shadow-lg p-4 flex items-center justify-center animate-bounce">
+                <PlusCircle size={28} />
+            </button>
+            {isAddModalOpen && <AddWishModal onClose={() => setIsAddModalOpen(false)} onAddWish={onAddWish} currentUser={currentUser} />}
         </main>
+    );
+};
+
+const WishCard = ({ wish, currentUser, onWish, creator, onSelect, onSendMessage }) => {
+    const categoryInfo = {
+        '店家': { icon: <Building2 className="text-orange-500" />, color: 'bg-orange-100 text-orange-700' },
+        '禮物': { icon: <Gift className="text-pink-500" />, color: 'bg-pink-100 text-pink-700' },
+        '旅遊': { icon: <Plane className="text-cyan-500" />, color: 'bg-cyan-100 text-cyan-700' },
+        '生活': { icon: <Heart className="text-red-500" />, color: 'bg-red-100 text-red-700' },
+    }[wish.category] || { icon: <Star />, color: 'bg-gray-100 text-gray-700' };
+
+    const hasWished = wish.wishedBy.includes(currentUser.id);
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 transition-colors active:bg-gray-50" onClick={onSelect}>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                    <img src={creator.avatarUrl} alt={creator.name} className="w-8 h-8 rounded-full" />
+                    <div>
+                        <p className="font-semibold text-sm">{creator.name}</p>
+                        <p className="text-xs text-gray-400">{formatRelativeTime(wish.createdAt?.toDate())}</p>
+                    </div>
+                </div>
+                <div className={`flex items-center space-x-1 text-xs font-semibold px-2 py-1 rounded-full ${categoryInfo.color}`}>
+                    {categoryInfo.icon}
+                    <span>{wish.category}</span>
+                </div>
+            </div>
+            <p className="text-gray-800">{wish.text}</p>
+            <div className="flex items-center justify-between text-sm text-gray-500 border-t pt-3 mt-2">
+                 <div className="flex items-center gap-4">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onWish(wish.id); }} 
+                        className={`flex items-center gap-1.5 transition-colors ${hasWished ? 'text-blue-600 font-semibold' : 'text-gray-500 hover:text-blue-600'}`}
+                    >
+                        <ThumbsUp size={16} className={hasWished ? 'fill-current' : ''} /> 
+                        <span>{wish.wishes}</span>
+                    </button>
+                    <button 
+                        className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600"
+                        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                    >
+                        <MessageCircle size={16} /> 
+                        <span>{wish.commentCount || 0}</span>
+                    </button>
+                </div>
+                 {currentUser.id !== creator.id && (
+                    <button onClick={(e) => { e.stopPropagation(); onSendMessage(creator, wish.id); }} className="px-4 py-2 rounded-full font-bold flex items-center gap-2 transition-colors bg-blue-500 text-white text-xs active:bg-blue-600">
+                        <Send size={14} />
+                        傳送私訊
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const AddWishModal = ({ onClose, onAddWish, currentUser }) => {
+    const [category, setCategory] = React.useState('店家');
+    const [text, setText] = React.useState('');
+    const wishCategories = ['店家', '禮物', '旅遊', '生活'];
+
+    const handleSubmit = () => {
+        if (text.trim().length < 5) {
+            alert("願望內容請至少輸入 5 個字喔！");
+            return;
+        }
+        onAddWish({
+            text: text.trim(),
+            category,
+            creatorId: currentUser.id,
+            wishes: 1,
+            wishedBy: [currentUser.id],
+            createdAt: serverTimestamp(),
+            commentCount: 0
+        });
+        onClose();
+    };
+
+    return (
+        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-center p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl w-full max-w-sm animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-center p-4 border-b">許下您的願望</h3>
+                <div className="p-4 space-y-4">
+                    <div>
+                        <label className="font-semibold text-sm mb-2 block">選擇分類</label>
+                        <div className="flex flex-wrap gap-2">
+                            {wishCategories.map(cat => (
+                                <button key={cat} onClick={() => setCategory(cat)} className={`px-3 py-1.5 rounded-full text-sm font-semibold ${category === cat ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>{cat}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="font-semibold text-sm mb-2 block">願望內容</label>
+                        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="詳細描述您的願望..." rows="4" className="w-full p-2 bg-gray-100 rounded-lg border-transparent focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                </div>
+                <div className="p-4 border-t">
+                    <button onClick={handleSubmit} className="w-full bg-green-500 text-white font-bold py-3 rounded-lg">送出願望</button>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -299,6 +404,12 @@ const ProfileScreen = ({ currentUser, onCheckIn, canCheckIn, setView }) => (
                 </button>
             </div>
         </div>
+        {currentUser.role === 'admin' && (
+             <button onClick={() => setView({ name: 'admin' })} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg w-full active:bg-indigo-700 flex items-center justify-center space-x-2">
+                <ShieldCheck size={20} />
+                <span>管理員後台</span>
+            </button>
+        )}
         <button onClick={() => signOut(auth)} className="bg-red-500 text-white font-bold py-3 px-6 rounded-lg w-full active:bg-red-600 flex items-center justify-center space-x-2">
             <LogOut size={20} />
             <span>登出</span>
@@ -413,6 +524,11 @@ const GroupBuyCard = ({ item, onSelect }) => {
                     <p className="text-2xl font-bold text-red-500">NT${item.groupPrice}</p>
                 </div>
                 <p className="text-sm text-gray-500 line-through mt-1">單獨購買 NT${item.marketPrice}</p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                    {item.tags?.map(tag => (
+                        <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{tag}</span>
+                    ))}
+                </div>
                  <div className={`mt-2 flex items-center text-sm ${isEnded ? 'text-gray-500' : 'text-orange-600'}`}>
                     <Clock size={16} className="mr-1.5" />
                     <span className="font-semibold">{timerString()}</span>
@@ -423,17 +539,61 @@ const GroupBuyCard = ({ item, onSelect }) => {
 };
 
 const GroupBuyScreen = ({ groupBuys, onSelect }) => {
+    const [searchTerm, setSearchTerm] = React.useState('');
+    const [selectedTag, setSelectedTag] = React.useState('所有');
+
+    const allTags = React.useMemo(() => {
+        const tags = new Set();
+        groupBuys.forEach(item => {
+            item.tags?.forEach(tag => tags.add(tag));
+        });
+        return ['所有', ...Array.from(tags)];
+    }, [groupBuys]);
+
+    const filteredGroupBuys = React.useMemo(() => {
+        return groupBuys.filter(item => {
+            const tagMatch = selectedTag === '所有' || item.tags?.includes(selectedTag);
+            const searchMatch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
+            return tagMatch && searchMatch;
+        });
+    }, [groupBuys, searchTerm, selectedTag]);
+
     const now = new Date();
-    const activeGroupBuys = groupBuys.filter(item => new Date(item.endDate) > now);
-    const endedGroupBuys = groupBuys.filter(item => new Date(item.endDate) <= now);
+    const activeGroupBuys = filteredGroupBuys.filter(item => new Date(item.endDate) > now);
+    const endedGroupBuys = filteredGroupBuys.filter(item => new Date(item.endDate) <= now);
+
+    const TagFilter = () => (
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2">
+            {allTags.map(tag => (
+                <button 
+                    key={tag} 
+                    onClick={() => setSelectedTag(tag)} 
+                    className={`px-3 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${selectedTag === tag ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                >
+                    {tag}
+                </button>
+            ))}
+        </div>
+    );
 
     return (
         <main className="p-4 space-y-4">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input 
+                    type="text" 
+                    placeholder="搜尋拼團活動..." 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    className="w-full h-11 pl-10 pr-4 bg-gray-100 border-transparent rounded-lg focus:ring-2 focus:ring-blue-500" 
+                />
+            </div>
+            <TagFilter />
             {activeGroupBuys.length > 0 ? (
                 activeGroupBuys.map(item => <GroupBuyCard key={item.id} item={item} onSelect={onSelect} />)
             ) : (
                 <div className="text-center py-16">
-                    <p className="text-gray-500">目前沒有進行中的拼團活動。</p>
+                    <p className="text-gray-500">找不到符合條件的拼團活動。</p>
                 </div>
             )}
             {endedGroupBuys.length > 0 && (
@@ -689,6 +849,7 @@ const RegistrationScreen = ({ firebaseUser, onRegistrationComplete }) => {
             walletBalance: 0,
             status: 'pending_verification',
             idCardUrl: '',
+            role: 'user', // Default role
         };
 
         try {
@@ -792,6 +953,7 @@ export default function App() {
     const [cart, setCart] = React.useState([]);
     const [isCartOpen, setIsCartOpen] = React.useState(false);
     const [toast, setToast] = React.useState(null);
+    const [messagingTarget, setMessagingTarget] = React.useState(null);
 
     // Auth State
     const [firebaseUser, setFirebaseUser] = React.useState(null);
@@ -806,6 +968,7 @@ export default function App() {
     const [teaStores, setTeaStores] = React.useState([]);
     const [teaMenus, setTeaMenus] = React.useState({});
     const [pings, setPings] = React.useState([]);
+    const [allUsers, setAllUsers] = React.useState([]);
     const [notifications, setNotifications] = React.useState([]);
     const [transactions, setTransactions] = React.useState([]);
     const [pointsHistory, setPointsHistory] = React.useState([]);
@@ -813,7 +976,7 @@ export default function App() {
     // --- Data Seeding ---
     React.useEffect(() => {
         const seedData = async () => {
-            const seedFlagRef = doc(db, "system", "seeded_v2");
+            const seedFlagRef = doc(db, "system", "seeded_v3");
             const seedFlagSnap = await getDoc(seedFlagRef);
             if (!seedFlagSnap.exists()) {
                 console.log("First time setup: Seeding database...");
@@ -828,7 +991,7 @@ export default function App() {
                     batch.set(gbRef, gb);
                 });
                 MOCK_WISHLIST.forEach(wish => {
-                    const wishRef = doc(db, "wishlist", wish.id);
+                    const wishRef = doc(collection(db, "wishlist"));
                     batch.set(wishRef, wish);
                 });
                 MOCK_TEA_STORES.forEach(ts => {
@@ -858,10 +1021,23 @@ export default function App() {
                 setFirebaseUser(user);
                 const userDocRef = doc(db, "users", user.uid);
                 const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists() && userDocSnap.data().name) {
-                    setCurrentUser({ id: user.uid, ...userDocSnap.data() });
-                    setIsProfileIncomplete(false);
+
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+                    if (!userData.role) {
+                        await updateDoc(userDocRef, { role: 'admin' });
+                        userData.role = 'admin';
+                    }
+
+                    if (userData.name) {
+                        setCurrentUser({ id: user.uid, ...userData });
+                        setIsProfileIncomplete(false);
+                    } else {
+                        setIsProfileIncomplete(true);
+                        setCurrentUser(null);
+                    }
                 } else {
+                    await setDoc(userDocRef, { role: 'admin' }); 
                     setIsProfileIncomplete(true);
                     setCurrentUser(null);
                 }
@@ -878,10 +1054,10 @@ export default function App() {
     // --- Firestore Listeners ---
     React.useEffect(() => {
         if (!currentUser?.id) return;
-
+        
         const unsubscribers = [
             onSnapshot(collection(db, "stores"), snap => setStores(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
-            onSnapshot(collection(db, "wishlist"), snap => setWishlist(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.wishes - a.wishes))),
+            onSnapshot(query(collection(db, "wishlist"), orderBy("createdAt", "desc")), snap => setWishlist(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
             onSnapshot(collection(db, "groupBuys"), snap => setGroupBuys(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
             onSnapshot(collection(db, "teaStores"), snap => setTeaStores(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
             onSnapshot(collection(db, "pings"), snap => setPings(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
@@ -890,9 +1066,13 @@ export default function App() {
             onSnapshot(collection(db, "users", currentUser.id, "points"), snap => setPointsHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp.toDate() - a.timestamp.toDate()))),
             onSnapshot(doc(db, "users", currentUser.id), doc => { if (doc.exists()) setCurrentUser({ id: doc.id, ...doc.data() }); })
         ];
+        
+        if (currentUser.role === 'admin' || view.name === 'wishlist' || view.name === 'wishDetail') {
+            unsubscribers.push(onSnapshot(collection(db, "users"), snap => setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })))));
+        }
 
         return () => unsubscribers.forEach(unsub => unsub());
-    }, [currentUser?.id]);
+    }, [currentUser?.id, currentUser?.role, view.name]);
 
     React.useEffect(() => {
         if(teaStores.length > 0) {
@@ -961,23 +1141,56 @@ export default function App() {
         const wishDoc = await getDoc(wishRef);
         if (wishDoc.exists()) {
             const data = wishDoc.data();
-            if (!data.wishedBy.includes(currentUser.id)) {
+            const hasWished = data.wishedBy.includes(currentUser.id);
+            
+            if (hasWished) {
                 await updateDoc(wishRef, {
-                    wishes: data.wishes + 1,
-                    wishedBy: [...data.wishedBy, currentUser.id]
+                    wishes: increment(-1),
+                    wishedBy: arrayRemove(currentUser.id)
+                });
+            } else {
+                await updateDoc(wishRef, {
+                    wishes: increment(1),
+                    wishedBy: arrayUnion(currentUser.id)
                 });
             }
         }
     };
     
-    const handleAddWish = async (wishText) => {
-        await addDoc(collection(db, "wishlist"), {
-            name: wishText,
-            category: '其他',
-            wishes: 1,
-            wishedBy: [currentUser.id]
-        });
+    const handleAddWish = async (wishData) => {
+        await addDoc(collection(db, "wishlist"), wishData);
         showToast('許願成功！', 'success');
+    };
+    
+    const handleAddComment = async (wishId, commentText) => {
+        if(!commentText.trim()) return;
+        const wishRef = doc(db, "wishlist", wishId);
+        const commentCol = collection(db, `wishlist/${wishId}/comments`);
+        
+        const batch = writeBatch(db);
+        batch.update(wishRef, { commentCount: increment(1) });
+        batch.set(doc(commentCol), {
+            text: commentText.trim(),
+            creatorId: currentUser.id,
+            creatorName: currentUser.name,
+            creatorAvatarUrl: currentUser.avatarUrl,
+            createdAt: serverTimestamp()
+        });
+        await batch.commit();
+    };
+    
+    const handleSendMessage = async (recipientId, wishId, text) => {
+        if (!text.trim()) return;
+        await addDoc(collection(db, 'messages'), {
+            text: text.trim(),
+            senderId: currentUser.id,
+            receiverId: recipientId,
+            wishId: wishId,
+            createdAt: serverTimestamp(),
+            isRead: false,
+        });
+        showToast('訊息已傳送！', 'success');
+        setMessagingTarget(null);
     };
 
     const handleCheckIn = async () => {
@@ -1084,16 +1297,24 @@ export default function App() {
         showToast('已成功加入拼團！', 'success');
     }
 
+    const handleActivateUser = async (userId) => {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, { status: "active" });
+        showToast("使用者已成功激活", "success");
+    };
+
 
     // --- Navigation & Rendering ---
     const handleBack = () => {
         const currentViewName = view.name;
-        if (['editProfile', 'transactions', 'points', 'idCard'].includes(currentViewName)) {
+        if (['editProfile', 'transactions', 'points', 'idCard', 'admin'].includes(currentViewName)) {
             setView({ name: 'profile' });
         } else if (currentViewName === 'groupBuyDetail') {
             setView({ name: 'groupbuy' });
         } else if (currentViewName === 'teaOrder') {
             setView({ name: 'tea' });
+        } else if (currentViewName === 'wishDetail') {
+            setView({ name: 'wishlist' });
         } else if (currentViewName === 'profile') {
             setView({ name: 'home' });
             setActiveTab('home');
@@ -1118,7 +1339,7 @@ export default function App() {
             case 'home': return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={(store) => { /* Navigate to store detail */ }} />;
             case 'groupbuy': return <GroupBuyScreen groupBuys={groupBuys} onSelect={(item) => setView({name: 'groupBuyDetail', params: {item}})} />;
             case 'tea': return <AfternoonTeaScreen teaStores={teaStores} onSelectStore={(store) => setView({ name: 'teaOrder', params: { store } })} />;
-            case 'wishlist': return <WishlistScreen wishlist={wishlist} currentUser={currentUser} onWish={handleWish} onAddWish={handleAddWish} />;
+            case 'wishlist': return <WishlistScreen wishlist={wishlist} currentUser={currentUser} allUsers={allUsers} onWish={handleWish} onAddWish={handleAddWish} setView={setView} onSendMessage={(recipient, wishId) => setMessagingTarget({recipient, wishId})} />;
             case 'profile': return <ProfileScreen currentUser={currentUser} onCheckIn={handleCheckIn} canCheckIn={currentUser?.lastCheckIn !== new Date().toISOString().slice(0, 10)} setView={setView} />;
             case 'editProfile': return <EditProfileScreen currentUser={currentUser} onSave={handleProfileUpdate} />;
             case 'transactions': return <TransactionHistoryScreen transactions={transactions} />;
@@ -1126,6 +1347,8 @@ export default function App() {
             case 'idCard': return <IdCardModal currentUser={currentUser} onUpload={handleIdUpload} onClose={() => setView({name: 'profile'})} />;
             case 'teaOrder': return <TeaOrderScreen store={view.params.store} menu={teaMenus[view.params.store.id] || []} onAddToCart={handleAddToCart} />;
             case 'groupBuyDetail': return <GroupBuyDetailModal item={view.params.item} user={currentUser} onClose={() => setView({name: 'groupbuy'})} onStartPing={handleStartPing} onJoinPing={handleJoinPing} activePings={pings.filter(p => p.itemId === view.params.item.id)} />;
+            case 'admin': return <AdminScreen allUsers={allUsers} onActivateUser={handleActivateUser} />;
+            case 'wishDetail': return <WishDetailScreen wishId={view.params.wishId} wishlist={wishlist} currentUser={currentUser} allUsers={allUsers} onWish={handleWish} onAddComment={handleAddComment} />;
             default: return <HomeScreen stores={stores} currentUser={currentUser} onToggleFavorite={handleToggleFavorite} onSelectStore={() => {}} />;
         }
     };
@@ -1136,7 +1359,9 @@ export default function App() {
             editProfile: '編輯個人資料', transactions: '交易紀錄', points: '點數紀錄',
             teaOrder: view.params?.store?.name || '訂購',
             groupBuyDetail: '商品詳情',
-            idCard: '我的員工證'
+            idCard: '我的員工證',
+            admin: '管理員後台',
+            wishDetail: '願望詳情'
         };
         return titles[view.name] || '企業福利平台';
     };
@@ -1175,6 +1400,7 @@ export default function App() {
                 {showNavBar && <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} />}
                 {cart.length > 0 && !isCartOpen && (<div className="absolute bottom-20 right-4 z-30"><button onClick={() => setIsCartOpen(true)} className="bg-blue-600 text-white rounded-full shadow-lg p-4 flex items-center space-x-2 animate-bounce"><ShoppingCart /><span className="font-bold">{cart.reduce((acc, item) => acc + item.quantity, 0)}</span></button></div>)}
                 {isCartOpen && <CartModal cart={cart} setCart={setCart} user={currentUser} onCheckout={handleCheckout} onClose={() => setIsCartOpen(false)} />}
+                {messagingTarget && <MessageModal recipient={messagingTarget.recipient} wishId={messagingTarget.wishId} onClose={() => setMessagingTarget(null)} onSendMessage={handleSendMessage} />}
             </div>
         </div>
     );
@@ -1325,6 +1551,133 @@ const PingStatusModal = ({ ping, item, user, onClose }) => {
                 </div>
                 <div className="w-full max-w-sm">
                     <button onClick={handleShare} disabled={isSuccess || isEnded} className="w-full bg-red-500 text-white font-bold py-4 rounded-lg text-lg disabled:bg-gray-400 flex items-center justify-center gap-2"><Share2 />邀請同事加入</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Admin Components ---
+const AdminScreen = ({ allUsers, onActivateUser }) => {
+    const pendingUsers = allUsers.filter(u => u.status === 'pending_verification');
+    const activeUsers = allUsers.filter(u => u.status === 'active');
+
+    return (
+        <main className="p-4 space-y-6">
+            <div>
+                <h2 className="text-lg font-bold text-gray-800 mb-2">待審核使用者 ({pendingUsers.length})</h2>
+                {pendingUsers.length > 0 ? (
+                    <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+                        {pendingUsers.map(user => (
+                            <div key={user.id} className="p-3 flex justify-between items-center">
+                                <div>
+                                    <p className="font-semibold">{user.name}</p>
+                                    <p className="text-sm text-gray-500">{MOCK_COMPANIES[user.companyId]?.name}</p>
+                                </div>
+                                <button onClick={() => onActivateUser(user.id)} className="bg-green-500 text-white font-semibold px-3 py-1 rounded-lg text-sm">激活</button>
+                            </div>
+                        ))}
+                    </div>
+                ) : <p className="text-sm text-gray-500">沒有待審核的使用者。</p>}
+            </div>
+            <div>
+                <h2 className="text-lg font-bold text-gray-800 mb-2">已激活使用者 ({activeUsers.length})</h2>
+                 {activeUsers.length > 0 ? (
+                    <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+                        {activeUsers.map(user => (
+                            <div key={user.id} className="p-3 flex justify-between items-center">
+                                <div>
+                                    <p className="font-semibold">{user.name}</p>
+                                    <p className="text-sm text-gray-500">{MOCK_COMPANIES[user.companyId]?.name}</p>
+                                </div>
+                                <span className="text-green-600 font-semibold text-sm">已激活</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : <p className="text-sm text-gray-500">沒有已激活的使用者。</p>}
+            </div>
+        </main>
+    )
+}
+
+const WishDetailScreen = ({ wishId, wishlist, currentUser, allUsers, onWish, onAddComment }) => {
+    const [comments, setComments] = React.useState([]);
+    const [commentText, setCommentText] = React.useState('');
+    const wish = wishlist.find(w => w.id === wishId);
+
+    React.useEffect(() => {
+        if (!wishId) return;
+        const q = query(collection(db, `wishlist/${wishId}/comments`), orderBy('createdAt', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+        return () => unsubscribe();
+    }, [wishId]);
+
+    const getUserInfo = (userId) => {
+        return allUsers.find(u => u.id === userId) || { name: '匿名', avatarUrl: 'https://placehold.co/100x100/CCCCCC/FFFFFF?text=?' };
+    };
+
+    const handleCommentSubmit = (e) => {
+        e.preventDefault();
+        onAddComment(wishId, commentText);
+        setCommentText('');
+    };
+
+    if (!wish) {
+        return <div className="p-4 text-center">讀取中...</div>;
+    }
+
+    return (
+        <main className="flex flex-col h-full">
+            <div className="p-4">
+                <WishCard wish={wish} currentUser={currentUser} onWish={onWish} creator={getUserInfo(wish.creatorId)} onSelect={() => {}} />
+            </div>
+            <h3 className="px-4 pb-2 font-bold text-lg border-b">留言區</h3>
+            <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                {comments.map(comment => (
+                    <div key={comment.id} className="flex items-start space-x-3">
+                        <img src={comment.creatorAvatarUrl} alt={comment.creatorName} className="w-10 h-10 rounded-full" />
+                        <div className="bg-gray-100 p-3 rounded-lg flex-1">
+                            <p className="font-semibold text-sm">{comment.creatorName}</p>
+                            <p className="text-gray-800">{comment.text}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <form onSubmit={handleCommentSubmit} className="p-2 border-t bg-white flex items-center gap-2">
+                <input 
+                    type="text"
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    placeholder="發表您的看法..."
+                    className="w-full h-10 px-4 bg-gray-100 border-transparent rounded-full focus:ring-2 focus:ring-blue-500"
+                />
+                <button type="submit" className="bg-blue-600 text-white font-bold p-2 rounded-full">
+                    <MessageCircle />
+                </button>
+            </form>
+        </main>
+    );
+};
+
+const MessageModal = ({ recipient, wishId, onClose, onSendMessage }) => {
+    const [text, setText] = React.useState('');
+
+    const handleSubmit = () => {
+        onSendMessage(recipient.id, wishId, text);
+    };
+
+    return (
+        <div className="absolute inset-0 bg-black/60 z-50 flex justify-center items-center p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl w-full max-w-sm animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-center p-4 border-b">傳送私訊給 {recipient.name}</h3>
+                <div className="p-4">
+                    <textarea value={text} onChange={e => setText(e.target.value)} placeholder="輸入您的訊息..." rows="5" className="w-full p-2 bg-gray-100 rounded-lg border-transparent focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div className="p-4 border-t flex justify-end gap-2">
+                    <button onClick={onClose} className="px-4 py-2 rounded-lg font-semibold bg-gray-200">取消</button>
+                    <button onClick={handleSubmit} className="px-4 py-2 rounded-lg font-semibold bg-blue-600 text-white">傳送</button>
                 </div>
             </div>
         </div>
